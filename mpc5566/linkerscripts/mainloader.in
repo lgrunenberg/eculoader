@@ -1,0 +1,29 @@
+ENTRY(mainloop)
+
+MEMORY {
+	ram : ORIGIN = 0x4000C000, LENGTH = 20K
+}
+
+SECTIONS {
+	.text : {
+		*(.text) 
+	} > ram
+
+	.data : {
+       	*(.rodata)
+		*(.data)
+	} > ram
+
+	.bss : {
+		__s_bss = . ;
+		*(.bss)
+		*(COMMON)
+		__e_bss = . ;
+	} > ram
+
+    /* save one instruction in the code */
+    bss_start = __s_bss - 1;
+    bss_size  = __e_bss - __s_bss;
+}
+
+

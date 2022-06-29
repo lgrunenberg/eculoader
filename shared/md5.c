@@ -1,0 +1,320 @@
+//////////////////////////////
+// This clusterfuck is used to hash md5
+#include "md5.h"
+
+//
+#pragma GCC push_options
+#pragma GCC optimize ("Og")
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+// Constants, target specific etc
+
+// mpc5566, what can I say?
+// It'll crap out if you read an address that has not been correctly written
+#if defined(safereads) || defined(mpc5566)
+extern uint8_t __attribute__ ((noinline)) ReadData(uint32_t ptr);
+#else
+#define ReadData(d) \
+    *(volatile uint8_t*)(d)
+#endif
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+// Code
+
+// Figure out byte offset within a dword
+#define horidswap(n) \
+    ((3 - (n & 3)) + (n & 60))
+
+// Perform a full byteswap of a Dword
+#define bs32(n) \
+    ((n) << 24 | (( (n) >> 8) & 0xFF) << 16 | (((n) >> 16) & 0xFF) << 8 | (((n) >> 24) & 0xFF))
+
+#define  FG(B, C, D)  ( (D) ^ ( (B) & ( (C) ^ (D) ) ) )
+#define   H(B, C, D)  ( ( (B) ^ (C) ) ^ (D) )
+#define   I(B, C, D)    ( (C) ^ ( (B) |~(D) ) )
+
+#define trnsf(f, a, b, c, d, n, dat, key, shft) \
+    (a) += f( (b), (c), (d) ) + (dat) + (key);   \
+    (a)  = ((a) << (shft) | ( (a) & 0xFFFFFFFF ) >> (32- (shft)) ) + (n);
+
+/*
+const uint32_t karr[] = {
+0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
+0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
+0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
+0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
+0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
+0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
+0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
+0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
+0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
+};
+*/
+
+
+// 2972
+
+#ifdef mpc5566
+
+typedef struct __attribute((packed)){
+    uint32_t a;
+    uint32_t b;
+    uint32_t c;
+    uint32_t d;
+} md5k_t;
+
+static void mdInitKeys(md5k_t *m)
+{
+    m->a = 0x67452301;
+    m->b = 0xefcdab89;
+    m->c = 0x98badcfe;
+    m->d = 0x10325476;
+}
+
+static void mdHash(md5k_t *m, uint32_t Start, uint32_t Length)
+{
+    uint32_t A, B, C, D;
+    uint8_t buf[64] __attribute__((aligned(4)));
+
+    do
+    {
+        A = m->a;
+        B = m->b;
+        C = m->c;
+        D = m->d;
+
+        for (uint32_t i = 0; i < 64; i++)
+            buf[horidswap(i)] = ReadData(Start++);
+        uint32_t *pntr = (uint32_t *)&buf[0];
+
+        trnsf(FG, A, B, C, D, B, pntr[ 0], 0xd76aa478,  7)
+        trnsf(FG, D, A, B, C, A, pntr[ 1], 0xe8c7b756, 12)
+        trnsf(FG, C, D, A, B, D, pntr[ 2], 0x242070db, 17)
+        trnsf(FG, B, C, D, A, C, pntr[ 3], 0xc1bdceee, 22)
+        trnsf(FG, A, B, C, D, B, pntr[ 4], 0xf57c0faf,  7)
+        trnsf(FG, D, A, B, C, A, pntr[ 5], 0x4787c62a, 12)
+        trnsf(FG, C, D, A, B, D, pntr[ 6], 0xa8304613, 17)
+        trnsf(FG, B, C, D, A, C, pntr[ 7], 0xfd469501, 22)
+        trnsf(FG, A, B, C, D, B, pntr[ 8], 0x698098d8,  7)
+        trnsf(FG, D, A, B, C, A, pntr[ 9], 0x8b44f7af, 12)
+        trnsf(FG, C, D, A, B, D, pntr[10], 0xffff5bb1, 17)
+        trnsf(FG, B, C, D, A, C, pntr[11], 0x895cd7be, 22)
+        trnsf(FG, A, B, C, D, B, pntr[12], 0x6b901122,  7)
+        trnsf(FG, D, A, B, C, A, pntr[13], 0xfd987193, 12)
+        trnsf(FG, C, D, A, B, D, pntr[14], 0xa679438e, 17)
+        trnsf(FG, B, C, D, A, C, pntr[15], 0x49b40821, 22)
+
+        trnsf(FG, A, D, B, C, B, pntr[ 1], 0xf61e2562,  5)
+        trnsf(FG, D, C, A, B, A, pntr[ 6], 0xc040b340,  9)
+        trnsf(FG, C, B, D, A, D, pntr[11], 0x265e5a51, 14)
+        trnsf(FG, B, A, C, D, C, pntr[ 0], 0xe9b6c7aa, 20)
+        trnsf(FG, A, D, B, C, B, pntr[ 5], 0xd62f105d,  5)
+        trnsf(FG, D, C, A, B, A, pntr[10], 0x02441453,  9)
+        trnsf(FG, C, B, D, A, D, pntr[15], 0xd8a1e681, 14)
+        trnsf(FG, B, A, C, D, C, pntr[ 4], 0xe7d3fbc8, 20)
+        trnsf(FG, A, D, B, C, B, pntr[ 9], 0x21e1cde6,  5)
+        trnsf(FG, D, C, A, B, A, pntr[14], 0xc33707d6,  9)
+        trnsf(FG, C, B, D, A, D, pntr[ 3], 0xf4d50d87, 14)
+        trnsf(FG, B, A, C, D, C, pntr[ 8], 0x455a14ed, 20)
+        trnsf(FG, A, D, B, C, B, pntr[13], 0xa9e3e905,  5)
+        trnsf(FG, D, C, A, B, A, pntr[ 2], 0xfcefa3f8,  9)
+        trnsf(FG, C, B, D, A, D, pntr[ 7], 0x676f02d9, 14)
+        trnsf(FG, B, A, C, D, C, pntr[12], 0x8d2a4c8a, 20)
+
+        trnsf(H , A, B, C, D, B, pntr[ 5], 0xfffa3942,  4)
+        trnsf(H , D, A, B, C, A, pntr[ 8], 0x8771f681, 11)
+        trnsf(H , C, D, A, B, D, pntr[11], 0x6d9d6122, 16)
+        trnsf(H , B, C, D, A, C, pntr[14], 0xfde5380c, 23)
+        trnsf(H , A, B, C, D, B, pntr[ 1], 0xa4beea44,  4)
+        trnsf(H , D, A, B, C, A, pntr[ 4], 0x4bdecfa9, 11)
+        trnsf(H , C, D, A, B, D, pntr[ 7], 0xf6bb4b60, 16)
+        trnsf(H , B, C, D, A, C, pntr[10], 0xbebfbc70, 23)
+        trnsf(H , A, B, C, D, B, pntr[13], 0x289b7ec6,  4)
+        trnsf(H , D, A, B, C, A, pntr[ 0], 0xeaa127fa, 11)
+        trnsf(H , C, D, A, B, D, pntr[ 3], 0xd4ef3085, 16)
+        trnsf(H , B, C, D, A, C, pntr[ 6], 0x04881d05, 23)
+        trnsf(H , A, B, C, D, B, pntr[ 9], 0xd9d4d039,  4)
+        trnsf(H , D, A, B, C, A, pntr[12], 0xe6db99e5, 11)
+        trnsf(H , C, D, A, B, D, pntr[15], 0x1fa27cf8, 16)
+        trnsf(H , B, C, D, A, C, pntr[ 2], 0xc4ac5665, 23)
+
+        trnsf(I , A, B, C, D, B, pntr[ 0], 0xf4292244,  6)
+        trnsf(I , D, A, B, C, A, pntr[ 7], 0x432aff97, 10)
+        trnsf(I , C, D, A, B, D, pntr[14], 0xab9423a7, 15)
+        trnsf(I , B, C, D, A, C, pntr[ 5], 0xfc93a039, 21)
+        trnsf(I , A, B, C, D, B, pntr[12], 0x655b59c3,  6)
+        trnsf(I , D, A, B, C, A, pntr[ 3], 0x8f0ccc92, 10)
+        trnsf(I , C, D, A, B, D, pntr[10], 0xffeff47d, 15)
+        trnsf(I , B, C, D, A, C, pntr[ 1], 0x85845dd1, 21)
+        trnsf(I , A, B, C, D, B, pntr[ 8], 0x6fa87e4f,  6)
+        trnsf(I , D, A, B, C, A, pntr[15], 0xfe2ce6e0, 10)
+        trnsf(I , C, D, A, B, D, pntr[ 6], 0xa3014314, 15)
+        trnsf(I , B, C, D, A, C, pntr[13], 0x4e0811a1, 21)
+        trnsf(I , A, B, C, D, B, pntr[ 4], 0xf7537e82,  6)
+        trnsf(I , D, A, B, C, A, pntr[11], 0xbd3af235, 10)
+        trnsf(I , C, D, A, B, D, pntr[ 2], 0x2ad7d2bb, 15)
+        trnsf(I , B, C, D, A, C, pntr[ 9], 0xeb86d391, 21)
+
+        m->a += A;
+        m->b += B;
+        m->c += C;
+        m->d += D;
+
+    } while (Length -= 64);
+}
+
+void *hashMD5(const uint32_t addr, const uint32_t len)
+{
+    uint8_t   buf[64] __attribute__((aligned(4)));
+    uint32_t *stfu  = (uint32_t*)&buf[56]; // Since, f*ck that warning
+    uint8_t   left  = len & 0x3F;
+    uint32_t  Start = addr;
+
+    static md5k_t md5prm;
+    mdInitKeys(&md5prm);
+
+    if (len > 63)
+        mdHash(&md5prm, Start, (len & ~63));
+
+    // Fill buffer with left over data (If applicable)
+    Start = Start + (len - left);
+    for (uint32_t i = 0; i < left; i++)
+        buf[i] = ReadData(Start++);
+
+    // Append 1 bit
+    buf[left] = 0x80;
+
+	// We must have enough room for the len-bytes
+	if (++left > 56)
+	{
+	    for ( ; left < 64; left++)
+	        buf[left] = 0;
+	    mdHash(&md5prm, (uint32_t)&buf[0],  64);
+	    left = 0; 
+	}
+
+    for ( ; left < 64; left++)
+        buf[left] = 0;
+
+	*stfu = bs32(len << 3);
+    mdHash(&md5prm, (uint32_t)&buf[0], 64);
+
+    md5prm.a = bs32(md5prm.a);
+    md5prm.b = bs32(md5prm.b);
+    md5prm.c = bs32(md5prm.c);
+    md5prm.d = bs32(md5prm.d);
+
+    return &md5prm;
+}
+
+#else
+
+/*
+typedef struct {
+    uint32_t ptr;
+    uint32_t len;
+    uint32_t a,b,c,d;
+} md5k_t;
+
+static void mdInitKeys(md5k_t *m)
+{
+    m->a = 0x67452301;
+    m->b = 0xefcdab89;
+    m->c = 0x98badcfe;
+    m->d = 0x10325476;
+}
+*/
+
+
+uint32_t mdarray[6];
+
+// extern void mdHash(md5k_t *m);
+extern void mdHash(uint32_t m);
+
+void *hashMD5(const uint32_t addr, const uint32_t len)
+{
+    uint8_t   buf[64] __attribute__((aligned(4)));
+    uint32_t *stfu  = (uint32_t*)&buf[56]; // Since, f*ck that warning
+    uint8_t   left  = len & 0x3F;
+    uint32_t  Start = addr;
+
+    // static md5k_t md5prm;
+    // mdInitKeys(&md5prm);
+
+    mdarray[2] = 0x67452301;
+    mdarray[3] = 0xefcdab89;
+    mdarray[4] = 0x98badcfe;
+    mdarray[5] = 0x10325476;
+
+
+    if (len > 63)
+    {
+        // md5prm.len = len; // (len & ~63);
+        // md5prm.ptr = addr;
+        // mdHash(&md5prm);
+        mdarray[0] = addr;
+        mdarray[1] = len;
+        mdHash((uint32_t)&mdarray[0]);
+        
+    }
+
+    // Fill buffer with left over data (If applicable)
+    Start = Start + (len - left);
+    for (uint32_t i = 0; i < left; i++)
+        buf[i] = ReadData(Start++);
+
+    // Append 1 bit
+    buf[left] = 0x80;
+
+	// We must have enough room for the len-bytes
+	if (++left > 56)
+	{
+	    for ( ; left < 64; left++)
+	        buf[left] = 0;
+        
+        // md5prm.len = 64;
+        // md5prm.ptr = (uint32_t) &buf[0];
+	    // mdHash(&md5prm);
+        mdarray[0] = (uint32_t) &buf[0];
+        mdarray[1] = 64;
+        mdHash((uint32_t)&mdarray[0]);
+	    left = 0; 
+	}
+
+    for ( ; left < 64; left++)
+        buf[left] = 0;
+
+	*stfu = bs32(len << 3);
+
+    // md5prm.len = 64;
+    // md5prm.ptr = (uint32_t) &buf[0];
+    // mdHash(&md5prm);
+    mdarray[0] = (uint32_t) &buf[0];
+    mdarray[1] = 64;
+    mdHash((uint32_t)&mdarray[0]);
+
+    mdarray[2] = bs32(mdarray[2]);
+    mdarray[3] = bs32(mdarray[3]);
+    mdarray[4] = bs32(mdarray[4]);
+    mdarray[5] = bs32(mdarray[5]);
+
+    return mdarray;
+}
+
+
+#endif
+
+
+
+#pragma GCC pop_options

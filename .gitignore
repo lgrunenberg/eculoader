@@ -1,0 +1,11 @@
+
+
+# exclude dot folders (editor settings, not to be published junk etc)
+.*/
+
+
+*.o
+*.ld
+*.elf
+*.bin
+*.lz
