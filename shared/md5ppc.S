@@ -11,8 +11,8 @@ blr
 mdHash:
     stwu    %sp,          -164(%sp)
     mflr    %r0
-    stmw   %r10,            76(%sp)
     stw     %r0,           168(%sp)
+    stmw   %r10,            76(%sp)
 
     lwz    %r19,    0(%r3)          /* Address */
     lwz     %r4,    4(%r3)          /* Count   */
@@ -21,25 +21,18 @@ mdHash:
     lwz     %r8,   16(%r3)          /* C       */
     lwz     %r9,   20(%r3)          /* D       */
     addi    %r5,      %r3,        8 /* Offset r5 to point at keys */
-    addi   %r18,      %sp,       12 /* Buffer window              */
-    li     %r20,                 16 /* Preload copy count         */
+    li     %r20,                 64 /* Preload copy count         */
 
 LoopOver:
+    addi   %r18,      %sp,       76 /* Buffer window + 64         */
 
+# This this is using a ugly trick to account for endianess differences AND speed things up
+# Basically fill it from top to bottom and flip every buffer index in the rest of the code. (Index 0 is at 60 etc)
     mtctr %r20
 copyMore:
     bl readMemmd
-    stb    %r3,  3(%r18)
-    bl readMemmd
-    stb    %r3,  2(%r18)
-    bl readMemmd
-    stb    %r3,  1(%r18)
-    bl readMemmd
-    stb    %r3,  0(%r18)
-    addi  %r18, %r18, 4
+    stbu   %r3, -1(%r18)
     bdnz copyMore
-
-    addi   %r18,                %sp, 12
 
     # Backing up A, B, C and D
     addi   %r12,                %r6,  0
@@ -49,7 +42,7 @@ copyMore:
 
     # # # # # STEP  0 # # # # #
 
-    lwz    %r17,   0(%r18) 
+    lwz    %r17,  60(%r18) 
     addis  %r12,     %r12,    55147
 
     # F  = D ^ (B & (C ^ D))
@@ -69,7 +62,7 @@ copyMore:
 
     # # # # # STEP  1 # # # # #
 
-    lwz    %r17,   4(%r18) 
+    lwz    %r17,  56(%r18) 
     addis  %r15,     %r15,    59592
 
     # F  = C ^ (A & (B ^ C))
@@ -89,7 +82,7 @@ copyMore:
 
     # # # # # STEP  2 # # # # #
 
-    lwz    %r17,   8(%r18) 
+    lwz    %r17,  52(%r18) 
     addis  %r14,     %r14,     9248
 
     # F  = B ^ (D & (A ^ B))
@@ -109,7 +102,7 @@ copyMore:
 
     # # # # # STEP  3 # # # # #
 
-    lwz    %r17,  12(%r18) 
+    lwz    %r17,  48(%r18) 
     addis  %r13,     %r13,    49598
 
     # F  = A ^ (C & (D ^ A))
@@ -129,7 +122,7 @@ copyMore:
 
     # # # # # STEP  4 # # # # #
 
-    lwz    %r17,  16(%r18) 
+    lwz    %r17,  44(%r18) 
     addis  %r12,     %r12,    62844
 
     # F  = D ^ (B & (C ^ D))
@@ -149,7 +142,7 @@ copyMore:
 
     # # # # # STEP  5 # # # # #
 
-    lwz    %r17,  20(%r18) 
+    lwz    %r17,  40(%r18) 
     addis  %r15,     %r15,    18312
 
     # F  = C ^ (A & (B ^ C))
@@ -169,7 +162,7 @@ copyMore:
 
     # # # # # STEP  6 # # # # #
 
-    lwz    %r17,  24(%r18) 
+    lwz    %r17,  36(%r18) 
     addis  %r14,     %r14,    43056
 
     # F  = B ^ (D & (A ^ B))
@@ -189,7 +182,7 @@ copyMore:
 
     # # # # # STEP  7 # # # # #
 
-    lwz    %r17,  28(%r18) 
+    lwz    %r17,  32(%r18) 
     addis  %r13,     %r13,    64839
 
     # F  = A ^ (C & (D ^ A))
@@ -209,7 +202,7 @@ copyMore:
 
     # # # # # STEP  8 # # # # #
 
-    lwz    %r17,  32(%r18) 
+    lwz    %r17,  28(%r18) 
     addis  %r12,     %r12,    27009
 
     # F  = D ^ (B & (C ^ D))
@@ -229,7 +222,7 @@ copyMore:
 
     # # # # # STEP  9 # # # # #
 
-    lwz    %r17,  36(%r18) 
+    lwz    %r17,  24(%r18) 
     addis  %r15,     %r15,    35653
 
     # F  = C ^ (A & (B ^ C))
@@ -249,7 +242,7 @@ copyMore:
 
     # # # # # STEP 10 # # # # #
 
-    lwz    %r17,  40(%r18) 
+    lwz    %r17,  20(%r18) 
     addis  %r14,     %r14,    65535
 
     # F  = B ^ (D & (A ^ B))
@@ -269,7 +262,7 @@ copyMore:
 
     # # # # # STEP 11 # # # # #
 
-    lwz    %r17,  44(%r18) 
+    lwz    %r17,  16(%r18) 
     addis  %r13,     %r13,    35165
 
     # F  = A ^ (C & (D ^ A))
@@ -289,7 +282,7 @@ copyMore:
 
     # # # # # STEP 12 # # # # #
 
-    lwz    %r17,  48(%r18) 
+    lwz    %r17,  12(%r18) 
     addis  %r12,     %r12,    27536
 
     # F  = D ^ (B & (C ^ D))
@@ -309,7 +302,7 @@ copyMore:
 
     # # # # # STEP 13 # # # # #
 
-    lwz    %r17,  52(%r18) 
+    lwz    %r17,  8(%r18) 
     addis  %r15,     %r15,    64920
 
     # F  = C ^ (A & (B ^ C))
@@ -329,7 +322,7 @@ copyMore:
 
     # # # # # STEP 14 # # # # #
 
-    lwz    %r17,  56(%r18) 
+    lwz    %r17,  4(%r18) 
     addis  %r14,     %r14,    42617
 
     # F  = B ^ (D & (A ^ B))
@@ -349,7 +342,7 @@ copyMore:
 
     # # # # # STEP 15 # # # # #
 
-    lwz    %r17,  60(%r18) 
+    lwz    %r17,  0(%r18) 
     addis  %r13,     %r13,    18868
 
     # F  = A ^ (C & (D ^ A))
@@ -369,7 +362,7 @@ copyMore:
 
     # # # # # STEP 16 # # # # #
 
-    lwz    %r17,   4(%r18) 
+    lwz    %r17,  56(%r18) 
     addis  %r12,     %r12,    63006
 
     # F  = C ^ (D & (B ^ C))
@@ -389,7 +382,7 @@ copyMore:
 
     # # # # # STEP 17 # # # # #
 
-    lwz    %r17,  24(%r18) 
+    lwz    %r17,  36(%r18) 
     addis  %r15,     %r15,    49217
 
     # F  = B ^ (C & (A ^ B))
@@ -409,7 +402,7 @@ copyMore:
 
     # # # # # STEP 18 # # # # #
 
-    lwz    %r17,  44(%r18) 
+    lwz    %r17,  16(%r18) 
     addis  %r14,     %r14,     9822
 
     # F  = A ^ (B & (D ^ A))
@@ -429,7 +422,7 @@ copyMore:
 
     # # # # # STEP 19 # # # # #
 
-    lwz    %r17,   0(%r18) 
+    lwz    %r17,  60(%r18) 
     addis  %r13,     %r13,    59831
 
     # F  = D ^ (A & (C ^ D))
@@ -449,7 +442,7 @@ copyMore:
 
     # # # # # STEP 20 # # # # #
 
-    lwz    %r17,  20(%r18) 
+    lwz    %r17,  40(%r18) 
     addis  %r12,     %r12,    54831
 
     # F  = C ^ (D & (B ^ C))
@@ -469,7 +462,7 @@ copyMore:
 
     # # # # # STEP 21 # # # # #
 
-    lwz    %r17,  40(%r18) 
+    lwz    %r17,  20(%r18) 
     addis  %r15,     %r15,      580
 
     # F  = B ^ (C & (A ^ B))
@@ -489,7 +482,7 @@ copyMore:
 
     # # # # # STEP 22 # # # # #
 
-    lwz    %r17,  60(%r18) 
+    lwz    %r17,  0(%r18) 
     addis  %r14,     %r14,    55458
 
     # F  = A ^ (B & (D ^ A))
@@ -509,7 +502,7 @@ copyMore:
 
     # # # # # STEP 23 # # # # #
 
-    lwz    %r17,  16(%r18) 
+    lwz    %r17,  44(%r18) 
     addis  %r13,     %r13,    59348
 
     # F  = D ^ (A & (C ^ D))
@@ -529,7 +522,7 @@ copyMore:
 
     # # # # # STEP 24 # # # # #
 
-    lwz    %r17,  36(%r18) 
+    lwz    %r17,  24(%r18) 
     addis  %r12,     %r12,     8674
 
     # F  = C ^ (D & (B ^ C))
@@ -549,7 +542,7 @@ copyMore:
 
     # # # # # STEP 25 # # # # #
 
-    lwz    %r17,  56(%r18) 
+    lwz    %r17,  4(%r18) 
     addis  %r15,     %r15,    49975
 
     # F  = B ^ (C & (A ^ B))
@@ -569,7 +562,7 @@ copyMore:
 
     # # # # # STEP 26 # # # # #
 
-    lwz    %r17,  12(%r18) 
+    lwz    %r17,  48(%r18) 
     addis  %r14,     %r14,    62677
 
     # F  = A ^ (B & (D ^ A))
@@ -589,7 +582,7 @@ copyMore:
 
     # # # # # STEP 27 # # # # #
 
-    lwz    %r17,  32(%r18) 
+    lwz    %r17,  28(%r18) 
     addis  %r13,     %r13,    17754
 
     # F  = D ^ (A & (C ^ D))
@@ -609,7 +602,7 @@ copyMore:
 
     # # # # # STEP 28 # # # # #
 
-    lwz    %r17,  52(%r18) 
+    lwz    %r17,  8(%r18) 
     addis  %r12,     %r12,    43492
 
     # F  = C ^ (D & (B ^ C))
@@ -629,7 +622,7 @@ copyMore:
 
     # # # # # STEP 29 # # # # #
 
-    lwz    %r17,   8(%r18) 
+    lwz    %r17,  52(%r18) 
     addis  %r15,     %r15,    64752
 
     # F  = B ^ (C & (A ^ B))
@@ -649,7 +642,7 @@ copyMore:
 
     # # # # # STEP 30 # # # # #
 
-    lwz    %r17,  28(%r18) 
+    lwz    %r17,  32(%r18) 
     addis  %r14,     %r14,    26479
 
     # F  = A ^ (B & (D ^ A))
@@ -669,7 +662,7 @@ copyMore:
 
     # # # # # STEP 31 # # # # #
 
-    lwz    %r17,  48(%r18) 
+    lwz    %r17,  12(%r18) 
     addis  %r13,     %r13,    36138
 
     # F  = D ^ (A & (C ^ D))
@@ -689,7 +682,7 @@ copyMore:
 
     # # # # # STEP 32 # # # # #
 
-    lwz    %r17,  20(%r18) 
+    lwz    %r17,  40(%r18) 
     addis  %r12,     %r12,    65530
 
     # F  = B ^ C ^ D
@@ -708,7 +701,7 @@ copyMore:
 
     # # # # # STEP 33 # # # # #
 
-    lwz    %r17,  32(%r18) 
+    lwz    %r17,  28(%r18) 
     addis  %r15,     %r15,    34674
 
     # F  = A ^ B ^ C
@@ -727,7 +720,7 @@ copyMore:
 
     # # # # # STEP 34 # # # # #
 
-    lwz    %r17,  44(%r18) 
+    lwz    %r17,  16(%r18) 
     addis  %r14,     %r14,    28061
 
     # F  = D ^ A ^ B
@@ -746,7 +739,7 @@ copyMore:
 
     # # # # # STEP 35 # # # # #
 
-    lwz    %r17,  56(%r18) 
+    lwz    %r17,  4(%r18) 
     addis  %r13,     %r13,    64997
 
     # F  = C ^ D ^ A
@@ -765,7 +758,7 @@ copyMore:
 
     # # # # # STEP 36 # # # # #
 
-    lwz    %r17,   4(%r18) 
+    lwz    %r17,  56(%r18) 
     addis  %r12,     %r12,    42175
 
     # F  = B ^ C ^ D
@@ -784,7 +777,7 @@ copyMore:
 
     # # # # # STEP 37 # # # # #
 
-    lwz    %r17,  16(%r18) 
+    lwz    %r17,  44(%r18) 
     addis  %r15,     %r15,    19423
 
     # F  = A ^ B ^ C
@@ -803,7 +796,7 @@ copyMore:
 
     # # # # # STEP 38 # # # # #
 
-    lwz    %r17,  28(%r18) 
+    lwz    %r17,  32(%r18) 
     addis  %r14,     %r14,    63163
 
     # F  = D ^ A ^ B
@@ -822,7 +815,7 @@ copyMore:
 
     # # # # # STEP 39 # # # # #
 
-    lwz    %r17,  40(%r18) 
+    lwz    %r17,  20(%r18) 
     addis  %r13,     %r13,    48832
 
     # F  = C ^ D ^ A
@@ -841,7 +834,7 @@ copyMore:
 
     # # # # # STEP 40 # # # # #
 
-    lwz    %r17,  52(%r18) 
+    lwz    %r17,  8(%r18) 
     addis  %r12,     %r12,    10395
 
     # F  = B ^ C ^ D
@@ -860,7 +853,7 @@ copyMore:
 
     # # # # # STEP 41 # # # # #
 
-    lwz    %r17,   0(%r18) 
+    lwz    %r17,  60(%r18) 
     addis  %r15,     %r15,    60065
 
     # F  = A ^ B ^ C
@@ -879,7 +872,7 @@ copyMore:
 
     # # # # # STEP 42 # # # # #
 
-    lwz    %r17,  12(%r18) 
+    lwz    %r17,  48(%r18) 
     addis  %r14,     %r14,    54511
 
     # F  = D ^ A ^ B
@@ -898,7 +891,7 @@ copyMore:
 
     # # # # # STEP 43 # # # # #
 
-    lwz    %r17,  24(%r18) 
+    lwz    %r17,  36(%r18) 
     addis  %r13,     %r13,     1160
 
     # F  = C ^ D ^ A
@@ -917,7 +910,7 @@ copyMore:
 
     # # # # # STEP 44 # # # # #
 
-    lwz    %r17,  36(%r18) 
+    lwz    %r17,  24(%r18) 
     addis  %r12,     %r12,    55765
 
     # F  = B ^ C ^ D
@@ -936,7 +929,7 @@ copyMore:
 
     # # # # # STEP 45 # # # # #
 
-    lwz    %r17,  48(%r18) 
+    lwz    %r17,  12(%r18) 
     addis  %r15,     %r15,    59100
 
     # F  = A ^ B ^ C
@@ -955,7 +948,7 @@ copyMore:
 
     # # # # # STEP 46 # # # # #
 
-    lwz    %r17,  60(%r18) 
+    lwz    %r17,  0(%r18) 
     addis  %r14,     %r14,     8098
 
     # F  = D ^ A ^ B
@@ -974,7 +967,7 @@ copyMore:
 
     # # # # # STEP 47 # # # # #
 
-    lwz    %r17,   8(%r18) 
+    lwz    %r17,  52(%r18) 
     addis  %r13,     %r13,    50348
 
     # F  = C ^ D ^ A
@@ -993,7 +986,7 @@ copyMore:
 
     # # # # # STEP 48 # # # # #
 
-    lwz    %r17,   0(%r18) 
+    lwz    %r17,  60(%r18) 
     addis  %r12,     %r12,    62505
 
     # F  = C ^ (B | (~D))
@@ -1012,7 +1005,7 @@ copyMore:
 
     # # # # # STEP 49 # # # # #
 
-    lwz    %r17,  28(%r18) 
+    lwz    %r17,  32(%r18) 
     addis  %r15,     %r15,    17195
 
     # F  = B ^ (A | (~C))
@@ -1031,7 +1024,7 @@ copyMore:
 
     # # # # # STEP 50 # # # # #
 
-    lwz    %r17,  56(%r18) 
+    lwz    %r17,  4(%r18) 
     addis  %r14,     %r14,    43924
 
     # F  = A ^ (D | (~B))
@@ -1050,7 +1043,7 @@ copyMore:
 
     # # # # # STEP 51 # # # # #
 
-    lwz    %r17,  20(%r18) 
+    lwz    %r17,  40(%r18) 
     addis  %r13,     %r13,    64660
 
     # F  = D ^ (C | (~A))
@@ -1069,7 +1062,7 @@ copyMore:
 
     # # # # # STEP 52 # # # # #
 
-    lwz    %r17,  48(%r18) 
+    lwz    %r17,  12(%r18) 
     addis  %r12,     %r12,    25947
 
     # F  = C ^ (B | (~D))
@@ -1088,7 +1081,7 @@ copyMore:
 
     # # # # # STEP 53 # # # # #
 
-    lwz    %r17,  12(%r18) 
+    lwz    %r17,  48(%r18) 
     addis  %r15,     %r15,    36621
 
     # F  = B ^ (A | (~C))
@@ -1107,7 +1100,7 @@ copyMore:
 
     # # # # # STEP 54 # # # # #
 
-    lwz    %r17,  40(%r18) 
+    lwz    %r17,  20(%r18) 
     addis  %r14,     %r14,    65520
 
     # F  = A ^ (D | (~B))
@@ -1126,7 +1119,7 @@ copyMore:
 
     # # # # # STEP 55 # # # # #
 
-    lwz    %r17,   4(%r18) 
+    lwz    %r17,  56(%r18) 
     addis  %r13,     %r13,    34180
 
     # F  = D ^ (C | (~A))
@@ -1145,7 +1138,7 @@ copyMore:
 
     # # # # # STEP 56 # # # # #
 
-    lwz    %r17,  32(%r18) 
+    lwz    %r17,  28(%r18) 
     addis  %r12,     %r12,    28584
 
     # F  = C ^ (B | (~D))
@@ -1164,7 +1157,7 @@ copyMore:
 
     # # # # # STEP 57 # # # # #
 
-    lwz    %r17,  60(%r18) 
+    lwz    %r17,  0(%r18) 
     addis  %r15,     %r15,    65069
 
     # F  = B ^ (A | (~C))
@@ -1183,7 +1176,7 @@ copyMore:
 
     # # # # # STEP 58 # # # # #
 
-    lwz    %r17,  24(%r18) 
+    lwz    %r17,  36(%r18) 
     addis  %r14,     %r14,    41729
 
     # F  = A ^ (D | (~B))
@@ -1202,7 +1195,7 @@ copyMore:
 
     # # # # # STEP 59 # # # # #
 
-    lwz    %r17,  52(%r18) 
+    lwz    %r17,  8(%r18) 
     addis  %r13,     %r13,    19976
 
     # F  = D ^ (C | (~A))
@@ -1221,7 +1214,7 @@ copyMore:
 
     # # # # # STEP 60 # # # # #
 
-    lwz    %r17,  16(%r18) 
+    lwz    %r17,  44(%r18) 
     addis  %r12,     %r12,    63315
 
     # F  = C ^ (B | (~D))
@@ -1240,7 +1233,7 @@ copyMore:
 
     # # # # # STEP 61 # # # # #
 
-    lwz    %r17,  44(%r18) 
+    lwz    %r17,  16(%r18) 
     addis  %r15,     %r15,    48443
 
     # F  = B ^ (A | (~C))
@@ -1259,7 +1252,7 @@ copyMore:
 
     # # # # # STEP 62 # # # # #
 
-    lwz    %r17,   8(%r18) 
+    lwz    %r17,  52(%r18) 
     addis  %r14,     %r14,    10968
 
     # F  = A ^ (D | (~B))
@@ -1278,7 +1271,7 @@ copyMore:
 
     # # # # # STEP 63 # # # # #
 
-    lwz    %r17,  36(%r18) 
+    lwz    %r17,  24(%r18) 
     addis  %r13,     %r13,    60295
 
     # F  = D ^ (C | (~A))
@@ -1305,7 +1298,7 @@ copyMore:
     bne                    LoopOver
 
     # Saving A, B, C and D
-    # stswi   %r6,      %r5,       16 /* This processor / compiler flags combination goes berserk with this */
+    # stswi   %r6,      %r5,       16 /* Causes a crash on this processor */
     stw %r6,  0(%r5)
     stw %r7,  4(%r5)
     stw %r8,  8(%r5)
