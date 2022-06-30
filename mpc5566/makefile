@@ -1,12 +1,6 @@
 PROC=powerpc
 TYPE=eabi
 
-MODFLAG=
-# MODFLAG += -DBAMMODE
-# MODFLAG += -DenableDebugBOX
-# MODFLAG += -Ddisableflash
-MODFLAG += -DenableBroadcast
-
 AS  = $(PROC)-$(TYPE)-as
 CC  = $(PROC)-$(TYPE)-gcc
 CPP = $(PROC)-$(TYPE)-cpp
@@ -16,6 +10,20 @@ NM  = $(PROC)-$(TYPE)-nm
 OBJDUMP = $(PROC)-$(TYPE)-objdump
 OBJCOPY = $(PROC)-$(TYPE)-objcopy
 SIZE    = $(PROC)-$(TYPE)-size
+
+ifdef OS
+LZTOOL=../hostutils/maintolz77.exe
+CSTOOL=../hostutils/bin2csfile.exe
+else
+LZTOOL=../hostutils/maintolz77
+CSTOOL=../hostutils/bin2csfile
+endif
+
+MODFLAG=
+# MODFLAG += -DBAMMODE
+# MODFLAG += -DenableDebugBOX
+# MODFLAG += -Ddisableflash
+MODFLAG += -DenableBroadcast
 
 # 401 403 405 405fp 440 440fp 464 464fp 476 476fp
 # 505 601 602 603 603e 604 604e 620 630 740 7400 7450 750
@@ -79,7 +87,8 @@ out/mainloader.elf : mainmessage out/mainloader.ld $(MAINOBJ)
 # This is _NOT_ vanilla lz77. Do not use other tools than this one
 out/mainloader.bin : out/mainloader.elf
 	@$(OBJCOPY) -O binary  $< $@
-	@../hostutils/maintolz77.exe out/mainloader.bin out/mainloader.lz
+	@$(LZTOOL) out/mainloader.bin out/mainloader.lz
+
 
 # # # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # #
@@ -111,7 +120,7 @@ out/loader.elf : premessage out/preloader.ld out/startup.o $(PREOBJ)
 out/loader.bin : out/loader.elf
 	@$(OBJCOPY) -O binary  $< $@
 	@rm -f Bootloader_mpc5566.cs
-	@../hostutils/bin2csfile.exe out/loader.bin Bootloader_mpc5566
+	@$(CSTOOL) out/loader.bin Bootloader_mpc5566
 	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/Bootloader_mpc5566.cs
 	@echo .
 	@echo .
@@ -121,7 +130,11 @@ out/loader.bin : out/loader.elf
 	@echo ___Pre loader__________________
 	@$(SIZE) -B out/loader.elf $(PREOBJ)
 	@echo .
+ifdef OS
 	@./makehelper.bat
+else
+	echo No script for Linux yet...
+endif
 
 clean :
 	@echo Cleaning..
