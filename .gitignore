@@ -1,11 +1,14 @@
 
 
-# exclude dot folders (editor settings, not to be published junk etc)
+# Exclude dot folders (editor settings, not to be published junk etc)
 .*/
 
-
+# Exclude most build-artefacts
 *.o
 *.ld
 *.elf
 *.bin
 *.lz
+
+# Exclusions from above
+!mpc5566/out/loader.bin
