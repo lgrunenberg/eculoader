@@ -62,6 +62,7 @@ static void mdHash(md5k_t *m, uint32_t Start, uint32_t Length)
 {
     uint32_t A, B, C, D;
     uint8_t buf[64] __attribute__((aligned(4)));
+    uint32_t *pntr = (uint32_t *)&buf[0];
 
     do
     {
@@ -72,7 +73,6 @@ static void mdHash(md5k_t *m, uint32_t Start, uint32_t Length)
 
         for (uint32_t i = 0; i < 64; i++)
             buf[horidswap(i)] = ReadData(Start++);
-        uint32_t *pntr = (uint32_t *)&buf[0];
 
         trnsf(FG, A, B, C, D, B, pntr[ 0], 0xd76aa478,  7)
         trnsf(FG, D, A, B, C, A, pntr[ 1], 0xe8c7b756, 12)
