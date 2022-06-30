@@ -4,7 +4,7 @@ TYPE=eabi
 MODFLAG=
 # MODFLAG += -DBAMMODE
 # MODFLAG += -DenableDebugBOX
-MODFLAG += -Ddisableflash
+# MODFLAG += -Ddisableflash
 MODFLAG += -DenableBroadcast
 
 AS  = $(PROC)-$(TYPE)-as
@@ -110,9 +110,9 @@ out/loader.elf : premessage out/preloader.ld out/startup.o $(PREOBJ)
 
 out/loader.bin : out/loader.elf
 	@$(OBJCOPY) -O binary  $< $@
+	@rm -f Bootloader_mpc5566.cs
 	@../hostutils/bin2csfile.exe out/loader.bin Bootloader_mpc5566
 	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/Bootloader_mpc5566.cs
-	@rm -f Bootloader_mpc5566.cs
 	@echo .
 	@echo .
 	@echo ___Main loader_________________
