@@ -122,18 +122,18 @@ out/loader.bin : out/loader.elf
 	@rm -f Bootloader_mpc5566.cs
 	@$(CSTOOL) out/loader.bin Bootloader_mpc5566
 	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/Bootloader_mpc5566.cs
-	@echo .
-	@echo .
+	@echo " "
+	@echo " "
 	@echo ___Main loader_________________
 	@$(SIZE) -B out/mainloader.elf $(MAINOBJ)
-	@echo .
+	@echo " "
 	@echo ___Pre loader__________________
 	@$(SIZE) -B out/loader.elf $(PREOBJ)
-	@echo .
+	@echo " "
 ifdef OS
 	@./makehelper.bat
 else
-	echo No script for Linux yet...
+	@./makehelper.sh
 endif
 
 clean :
