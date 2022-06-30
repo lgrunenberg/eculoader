@@ -3,23 +3,16 @@
 #include <sstream>
 #include <string>
 #include <iomanip>
-using namespace std;
-
 #include <cstdio>
 
-string GetFileName(string f)
-{
-	int split = f.find_last_of('\\');
-	f.erase(0, split + 1);
-	return f;
-}
+using namespace std;
 
 #define LZ_MAX_OFFSET 4096
 
 static inline uint32_t LZ_StringCompare(uint8_t *str1, uint8_t *str2,
 	uint32_t minlen, uint32_t maxlen)
 {
-	for (minlen; (minlen < maxlen) && (str1[minlen] == str2[minlen]); minlen++);
+	for ( ; (minlen < maxlen) && (str1[minlen] == str2[minlen]); minlen++);
 	return minlen;
 }
 

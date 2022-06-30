@@ -8,31 +8,23 @@ using namespace std;
 #include <cstdio>
 #define len(a) (sizeof(a)/sizeof(*a))
 
-string GetFileName(string f)
-{
-	int split = f.find_last_of('\\');
-	f.erase(0, split + 1);
-	return f;
-}
-
-// Love me some pointers! :D
-string print(char *data)
+string print(unsigned char *data)
 {
 	stringstream ss;
 
 	// Space out
 	ss << "            ";
 
-	for (char i = 0; i < 8; i++)
+	for (int i = 0; i < 8; i++)
 	{
-		ss << "0x" << hex << setw(2) << setfill('0') << (int)(unsigned char)data[i];
+		ss << "0x" << hex << setw(2) << setfill('0') << (int)(data[i]);
 		ss << ", ";
 	}
 
 	ss << "\n";
 
 	// Pre-clean for next frame
-	for (char i = 0; i < 8; i++)
+	for (int i = 0; i < 8; i++)
 		data[i] = 0;
 
 	return ss.str();
@@ -41,9 +33,6 @@ string print(char *data)
 
 int main(int argc, char** argv)
 {
-	// string executable = argv[0];
-	// executable = GetFileName(executable);
-
 	if (argc < 3)
 	{
 		cout << "\nNot enough arguments!\n";
@@ -71,16 +60,16 @@ int main(int argc, char** argv)
 	streamoff Len = infile.tellg();
 	infile.seekg(0, ifstream::beg);
 
-	char *data = (char*)malloc((int)Len);
+	unsigned char *data = (unsigned char*)malloc((int)Len);
 	if (!data)
 	{
 		cout << "\nCould not allocate buffer\n";
 		return 1;
 	}
 	// char data[32768];
-	char *dataptr = &data[0];
+	unsigned char *dataptr = &data[0];
 
-	infile.read(data, Len);
+	infile.read((char*)data, Len);
 	infile.close();
 
 
@@ -113,7 +102,7 @@ int main(int argc, char** argv)
 			ss << ", ";
 		}
 		// Pad if need be
-		for (i; i < 8; i++)
+		for ( ; i < 8; i++)
 		{
 			ss << "0x" << hex << setw(2) << setfill('0') << (int)(unsigned char)0;
 			ss << ", ";
