@@ -41,31 +41,7 @@ extern uint8_t __attribute__ ((noinline)) ReadData(uint32_t ptr);
     (a) += f( (b), (c), (d) ) + (dat) + (key);   \
     (a)  = ((a) << (shft) | ( (a) & 0xFFFFFFFF ) >> (32- (shft)) ) + (n);
 
-/*
-const uint32_t karr[] = {
-0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
-0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
-0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
-0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
-0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
-0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
-0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
-0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
-0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
-0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
-0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
-0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
-0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
-0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
-0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
-0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
-};
-*/
-
-
-// 2972
-
-#ifdef mpc5566
+#ifndef POWERPC
 
 typedef struct __attribute((packed)){
     uint32_t a;
@@ -220,27 +196,15 @@ void *hashMD5(const uint32_t addr, const uint32_t len)
 
 #else
 
-/*
-typedef struct {
-    uint32_t ptr;
-    uint32_t len;
-    uint32_t a,b,c,d;
-} md5k_t;
+extern void mdHash(void *m);
 
-static void mdInitKeys(md5k_t *m)
+static void mdInitKeys(uint32_t *m)
 {
-    m->a = 0x67452301;
-    m->b = 0xefcdab89;
-    m->c = 0x98badcfe;
-    m->d = 0x10325476;
+    m[2] = 0x67452301; // A
+    m[3] = 0xefcdab89; // B
+    m[4] = 0x98badcfe; // C
+    m[5] = 0x10325476; // D
 }
-*/
-
-
-uint32_t mdarray[6];
-
-// extern void mdHash(md5k_t *m);
-extern void mdHash(uint32_t m);
 
 void *hashMD5(const uint32_t addr, const uint32_t len)
 {
@@ -249,24 +213,13 @@ void *hashMD5(const uint32_t addr, const uint32_t len)
     uint8_t   left  = len & 0x3F;
     uint32_t  Start = addr;
 
-    // static md5k_t md5prm;
-    // mdInitKeys(&md5prm);
+    static uint32_t mdarray[6];
+    mdInitKeys(mdarray);
 
-    mdarray[2] = 0x67452301;
-    mdarray[3] = 0xefcdab89;
-    mdarray[4] = 0x98badcfe;
-    mdarray[5] = 0x10325476;
-
-
-    if (len > 63)
-    {
-        // md5prm.len = len; // (len & ~63);
-        // md5prm.ptr = addr;
-        // mdHash(&md5prm);
+    if (len > 63) {
         mdarray[0] = addr;
-        mdarray[1] = len;
-        mdHash((uint32_t)&mdarray[0]);
-        
+        mdarray[1] = (len & ~63);
+        mdHash(mdarray);
     }
 
     // Fill buffer with left over data (If applicable)
@@ -282,13 +235,10 @@ void *hashMD5(const uint32_t addr, const uint32_t len)
 	{
 	    for ( ; left < 64; left++)
 	        buf[left] = 0;
-        
-        // md5prm.len = 64;
-        // md5prm.ptr = (uint32_t) &buf[0];
-	    // mdHash(&md5prm);
+
         mdarray[0] = (uint32_t) &buf[0];
         mdarray[1] = 64;
-        mdHash((uint32_t)&mdarray[0]);
+        mdHash(mdarray);
 	    left = 0; 
 	}
 
@@ -297,21 +247,17 @@ void *hashMD5(const uint32_t addr, const uint32_t len)
 
 	*stfu = bs32(len << 3);
 
-    // md5prm.len = 64;
-    // md5prm.ptr = (uint32_t) &buf[0];
-    // mdHash(&md5prm);
     mdarray[0] = (uint32_t) &buf[0];
     mdarray[1] = 64;
-    mdHash((uint32_t)&mdarray[0]);
+    mdHash(mdarray);
 
     mdarray[2] = bs32(mdarray[2]);
     mdarray[3] = bs32(mdarray[3]);
     mdarray[4] = bs32(mdarray[4]);
     mdarray[5] = bs32(mdarray[5]);
 
-    return mdarray;
+    return &mdarray[2];
 }
-
 
 #endif
 

@@ -156,7 +156,7 @@ rebaseInterrupt:
 # Missing blr is on purpose to save space!
 
 # # # # # # # # # # # # # # # # # # # #
-# Fallback function; Return 0xff when the flash threw an ECC interrupt
+# Fallback function; Return 0xff when the flash threw an ECC exception
 ReadDataFail:
     li  %r3, 0xFF
 blr
