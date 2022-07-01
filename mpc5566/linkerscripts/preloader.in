@@ -2,19 +2,19 @@ STARTUP(out/startup.o)
 ENTRY(_Reset)
 
 MEMORY {
-	ram : ORIGIN = 0x40004000, LENGTH = 16K
+    ram : ORIGIN = 0x40004000, LENGTH = 16K
 }
 
 SECTIONS {
 
-	.text : {
-		*(.text) 
-	} > ram
+    .text : {
+        *(.text) 
+    } > ram
 
-	.data : {
+    .data : {
         . = ALIGN(4);
         *(.rodata)
-		*(.data)
+        *(.data)
 #ifdef BAMMODE
         /* Unless the main binary is cheating, you only have to do this in BAM mode. */
         /* bss may sometimes be excluded (and align is ignored for some reason).     */
@@ -22,11 +22,11 @@ SECTIONS {
         . = ALIGN(8);
         __LoaderEnd = . ;
 #endif
-	} > ram
+    } > ram
 
-	.bss : {
-		*(.bss)
-	} > ram
+    .bss : {
+        *(.bss)
+    } > ram
 }
 
 
