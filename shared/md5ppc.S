@@ -26,7 +26,7 @@ mdHash:
 LoopOver:
     addi   %r18,      %sp,       76 /* Buffer window + 64         */
 
-# This this is using a ugly trick to account for endianess differences AND speed things up
+# This is using a ugly trick to account for endianess differences AND speed things up
 # Basically fill it from top to bottom and flip every buffer index in the rest of the code. (Index 0 is at 60 etc)
     mtctr %r20
 copyMore:
