@@ -198,6 +198,10 @@ static const runInit_t runInit[] = {
     { (uint32_t *)0xFFF98000, 0x00004000 }, // C
     // Disable eMIOS module
     { (uint32_t *)0xC3FA0000, 0x40000000 },
+    // .. eQADC ints
+    { (uint32_t *)0xFFF80060, 0x00000000 },
+    { (uint32_t *)0xFFF80064, 0x00000000 },
+    { (uint32_t *)0xFFF80068, 0x00000000 },
 };
 
 
@@ -207,7 +211,7 @@ static void disable_Internal()
 {
     // No interrupts for you!
     uint8_t *PSRn = (uint8_t *)0xFFF48040;
-    for (uint32_t i = 0; i < 330; i++)
+    for (int i = 0; i < 330; i++)
         *PSRn++ = 0;
 
 #ifndef BAMMODE
@@ -217,17 +221,18 @@ static void disable_Internal()
         *runInit[i].ptr = runInit[i].data;
     }
 
+/*
     // .. eQADC ints
     uint16_t *eQADCptr = (uint16_t *)0xFFF80060;
-    for (uint32_t i = 0; i < 6; i++)
+    for (int i = 0; i < 6; i++)
         *eQADCptr++ = 0;
-
+*/
     // Kill eDMA ints (if any)
     *(volatile uint32_t *)0xFFF44020 |= *(volatile uint32_t *)0xFFF44020;
     *(volatile uint32_t *)0xFFF44024 |= *(volatile uint32_t *)0xFFF44024;
 
     if (modeWord != MODE_E78)
-        *(volatile uint32_t *) 0xFFF9C000 = 0x4000; // DSPI D
+        *(volatile uint32_t *)0xFFF9C000 = 0x4000; // DSPI D
 
     // eSCI
     // Not even present in the firmware from what I could find..
@@ -236,7 +241,7 @@ static void disable_Internal()
     // *(uint32_t *) 0xFFFB000C = 0;
     // *(uint32_t *) 0xFFFB400C = 0;
     if (modeWord == MODE_E39)
-        *(uint16_t *)0xC3F90048 = 0x203;
+        *(volatile uint16_t *)0xC3F90048 = 0x203;
 
 #endif
 
