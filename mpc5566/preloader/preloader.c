@@ -156,6 +156,52 @@ static void setupIntTable()
     }
 }
 
+
+typedef struct {
+    uint32_t *ptr;
+    uint32_t data;
+} runInit_t;
+
+static const runInit_t runInit[] = {
+    // FlexCAN
+//  { (uint32_t *)0xFFFC0000, 0x80000000 }, // A
+    { (uint32_t *)0xFFFC4000, 0x80000000 }, // B
+    { (uint32_t *)0xFFFC8000, 0x80000000 }, // C
+    { (uint32_t *)0xFFFCC000, 0x80000000 }, // D
+    // Disable CAN A interrupts
+    { (uint32_t *)0xFFFC0024, 0x00000000 },
+    { (uint32_t *)0xFFFC0028, 0x00000000 },
+    // eTPU A and B (Must be taken down before eMIOS)
+    { (uint32_t *)0xC3FC0014, 0x40000000 },
+    { (uint32_t *)0xC3FC0018, 0x40000000 },
+    // eDMA ints
+    { (uint32_t *)0xFFF44008, 0x00000000 },
+    { (uint32_t *)0xFFF4400C, 0x00000000 },
+    { (uint32_t *)0xFFF44010, 0x00000000 },
+    { (uint32_t *)0xFFF44014, 0x00000000 },
+//  { (uint32_t *)0xFFF44020, 0x00000000 }, // High (it is available. Bad DS)
+//  { (uint32_t *)0xFFF44024, 0x00000000 }, // Low request
+    // DSPI ints
+    { (uint32_t *)0xFFF90030, 0x00000000 },
+    { (uint32_t *)0xFFF94030, 0x00000000 },
+    { (uint32_t *)0xFFF98030, 0x00000000 },
+    { (uint32_t *)0xFFF9C030, 0x00000000 },
+    { (uint32_t *)0xC3F90018, 0x00000000 }, // SIU_DIRER (DMA Int)
+    { (uint32_t *)0xC3F90024, 0x00000000 }, // SIU_ORER
+    { (uint32_t *)0xC3F90028, 0x00000000 }, // SIU_IREER
+    { (uint32_t *)0xC3F9002C, 0x00000000 }, // SIU_IFEER
+    // eQADC ints
+    { (uint32_t *)0xFFF80000, 0x00000000 }, // No debug, no SSI
+    // DSPI
+    { (uint32_t *)0xFFF90000, 0x00004000 }, // A
+    { (uint32_t *)0xFFF94000, 0x00004000 }, // B
+    { (uint32_t *)0xFFF98000, 0x00004000 }, // C
+    // Disable eMIOS module
+    { (uint32_t *)0xC3FA0000, 0x40000000 },
+};
+
+
+
 // Disable a little bit of everything..
 static void disable_Internal()
 {
@@ -165,53 +211,23 @@ static void disable_Internal()
         *PSRn++ = 0;
 
 #ifndef BAMMODE
-    // FlexCAN
-//  *(uint32_t *)0xFFFC0000 = 0x80000000; // A
-    *(uint32_t *)0xFFFC4000 = 0x80000000; // B
-    *(uint32_t *)0xFFFC8000 = 0x80000000; // C
-    *(uint32_t *)0xFFFCC000 = 0x80000000; // D
 
-    // Disable CAN A interrupts
-    *(uint32_t *)0xFFFC0024 = 0;
-    *(uint32_t *)0xFFFC0028 = 0;
+    for (int i = 0; i < (sizeof(runInit)/sizeof(runInit[0])); i++)
+    {
+        *runInit[i].ptr = runInit[i].data;
+    }
 
-    // eTPU A and B (Must be taken down before eMIOS)
-    *(volatile uint32_t *)0xC3FC0014 |= 0x40000000;
-    *(volatile uint32_t *)0xC3FC0018 |= 0x40000000;
-
-    // eDMA ints
-    *(uint32_t *)0xFFF44008 = 0;
-    *(uint32_t *)0xFFF4400C = 0;
-    *(uint32_t *)0xFFF44010 = 0;
-    *(uint32_t *)0xFFF44014 = 0;
-
-    *(volatile uint32_t *)0xFFF44020 |= *(volatile uint32_t *)0xFFF44020;
-    *(volatile uint32_t *)0xFFF44024 |= *(volatile uint32_t *)0xFFF44024;
-    // *(volatile uint32_t *)0xFFF44020 = 0; // High (it is available. Bad DS)
-    // *(volatile uint32_t *)0xFFF44024 = 0; // Low request
-
-    *(uint32_t *)0xFFF90030 = 0; // DSPI ints
-    *(uint32_t *)0xFFF94030 = 0;
-    *(uint32_t *)0xFFF98030 = 0;
-    *(uint32_t *)0xFFF9C030 = 0;
-
-    *(uint32_t *)0xC3F90018 = 0; // SIU_DIRER (DMA Int)
-    *(uint32_t *)0xC3F90024 = 0; // SIU_ORER
-    *(uint32_t *)0xC3F90028 = 0; // SIU_IREER
-    *(uint32_t *)0xC3F9002C = 0; // SIU_IFEER
-
-    // eQADC ints
-    *(uint32_t *) 0xFFF80000 = 0; // No debug, no SSI
+    // .. eQADC ints
     uint16_t *eQADCptr = (uint16_t *)0xFFF80060;
     for (uint32_t i = 0; i < 6; i++)
         *eQADCptr++ = 0;
 
-    // DSPI
-    *(volatile uint32_t *) 0xFFF90000 |= 0x4000; // A
-    *(volatile uint32_t *) 0xFFF94000 |= 0x4000; // B
-    *(volatile uint32_t *) 0xFFF98000 |= 0x4000; // C
+    // Kill eDMA ints (if any)
+    *(volatile uint32_t *)0xFFF44020 |= *(volatile uint32_t *)0xFFF44020;
+    *(volatile uint32_t *)0xFFF44024 |= *(volatile uint32_t *)0xFFF44024;
+
     if (modeWord != MODE_E78)
-        *(volatile uint32_t *) 0xFFF9C000 |= 0x4000; // D
+        *(volatile uint32_t *) 0xFFF9C000 = 0x4000; // DSPI D
 
     // eSCI
     // Not even present in the firmware from what I could find..
@@ -221,9 +237,6 @@ static void disable_Internal()
     // *(uint32_t *) 0xFFFB400C = 0;
     if (modeWord == MODE_E39)
         *(uint16_t *)0xC3F90048 = 0x203;
-
-    // Disable eMIOS module
-    *(volatile uint32_t *)0xC3FA0000 |= 0x40000000;
 
 #endif
 
