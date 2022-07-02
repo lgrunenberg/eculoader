@@ -12,5 +12,8 @@
 
 *.vcxproj.user
 
+hostutils.bin2csfile
+hostutils.maintolz77
+
 # Exclusions from above
 !mpc5566/out/loader.bin
