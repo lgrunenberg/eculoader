@@ -10,5 +10,7 @@
 *.bin
 *.lz
 
+*.vcxproj.user
+
 # Exclusions from above
 !mpc5566/out/loader.bin
