@@ -48,7 +48,7 @@ OurBase:
     ori     %r4, %r4, 0x1000 /* ME   */
     oris    %r4, %r4, 0x0200 /* SPE  */
     mtmsr   %r4
-    
+
     # MSR:
     # UCLE:  26    /* User cache lock ena             */
     # SPE:   25    /* SPE available                   */
@@ -92,8 +92,6 @@ ECCinitHi:
 
 #endif
 
-
-#rewrewrewre
 #    make sure to disable branch control unit (bucsr)
 
     # Turn of cache since it's just a _PAIN IN THE F*CKING ASS_ to tame. Plenty fast any way...
