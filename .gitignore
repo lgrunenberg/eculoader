@@ -9,7 +9,6 @@
 *.elf
 *.bin
 *.lz
-
 *.vcxproj.user
 
 hostutils/bin2csfile
