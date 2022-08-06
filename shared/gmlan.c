@@ -496,7 +496,7 @@ void GMLAN_MainLoop()
     {
 #ifdef enableBroadcast
         uint32_t passedTime = msTimer - oldTime;
-        if (passedTime >= 1000)
+        if (passedTime >= 2000)
         {
             oldTime = msTimer;
             broadcastMessage();

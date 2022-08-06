@@ -232,16 +232,20 @@ static void disable_Internal()
     *(volatile uint32_t *)0xFFF44024 |= *(volatile uint32_t *)0xFFF44024;
 
     if (modeWord != MODE_E78)
-        *(volatile uint32_t *)0xFFF9C000 = 0x4000; // DSPI D
+    {
+        // Pad configuration 4
+        if (modeWord == MODE_E39)
+            *(volatile uint16_t *)0xC3F90048 = 0x203;
 
+        // Turn off since it's not used on this platform
+        *(volatile uint32_t *)0xFFF9C000 = 0x4000; // DSPI D
+    }
     // eSCI
     // Not even present in the firmware from what I could find..
     // *(uint16_t *) 0xFFFB0004 |= 0x8000;
     // *(uint16_t *) 0xFFFB4004 |= 0x8000;
     // *(uint32_t *) 0xFFFB000C = 0;
     // *(uint32_t *) 0xFFFB400C = 0;
-    if (modeWord == MODE_E39)
-        *(volatile uint16_t *)0xC3F90048 = 0x203;
 
 #endif
 
