@@ -240,9 +240,9 @@ static uint32_t configureFlexCAN()
 
     *CANa_MCR &= ~0x21003F;    // no buffers, disable MBFEN and warnings
 
-#if defined(enableDebugBOX) && defined(enableBroadcast)
+#if (defined(enableDebugBOX) && defined(enableBroadcast))
     *CANa_MCR |=  0x020000 | 3; // No stupid self-reception and use 4 buffers
-#elif defined(enableDebugBOX) || defined(enableBroadcast)
+#elif (defined(enableDebugBOX) || defined(enableBroadcast))
     *CANa_MCR |=  0x020000 | 2; // No stupid self-reception and use 3 buffers
 #else
     *CANa_MCR |=  0x020000 | 1; // No stupid self-reception and use 2 buffers
@@ -263,7 +263,7 @@ static uint32_t configureFlexCAN()
     CANa_MB0[4] |= 0x08080000; // (1) Send
     CANa_MB0[5]  = localID << 18;
 
-#if defined(enableDebugBOX) && defined(enableBroadcast)
+#if (defined(enableDebugBOX) && defined(enableBroadcast))
     CANa_MB0[8] |= 0x08080000;  // (2) Send
     CANa_MB0[9]  = debugID << 18;
     CANa_MB0[12] |= 0x08080000; // (3) Send
@@ -334,92 +334,56 @@ static void main_Init()
     configureFlash();
 }
 
+
+
+
+
+
+/*
+DSPIx_MCR == mcr reg
+
+
+
+
+
+
+
+*(volatile uint32_t *)0xFFF90000 = 0x4000; // DSPI A
+
+static void broadcast_e78SPIWatchdog()
+{
+    static   uint16_t dArr[]       = { 0x542C, 0, 0 };
+    volatile uint32_t *DSPId_sr    = (volatile uint32_t *)0xFFF9C02C;
+    volatile uint32_t *DSPId_PUSHR = (volatile uint32_t *)0xFFF9C034;
+    // volatile uint32_t *DSPId_POPR  = (volatile uint32_t *)0xFFF9C038;
+    *dArr ^= 0x3E00; // Notice static!
+
+    for (uint32_t i = 0; i < 3; i++)
+    {
+        *DSPId_sr |= 0x80000000;
+        uint32_t data = 0x90010000 | dArr[i]; // CONT, CTAR1, CS0
+
+        if (i == 2)
+            data &= 0x3FFFFF;
+
+        *DSPId_PUSHR = data;
+        while (! ((*DSPId_sr) & 0x80000000) )   ;
+    }
+}
+*/
+
+
+
+
+
 void mainloop()
 {
-    // *(uint32_t*)0xC3F00000 = 0x77777777;
-    // *(uint32_t*)0xFFF00000 = 0x77777777;
-    // *(uint32_t*)0xC3F00040 = 0x40404040;
-
     main_Init();
     mainReady = 1;
 
-/*
-111 ? c3f00000 77777777     2,578
-111 ? c3f00020 10000000      ,702!
-111 ? c3f00040 33108000      ,688!
-
-111 ? c3f00044 80000000      ,698!
-111 ? c3f00048 9088b000      ,688!
-111 ? fff00000 77777777      ,698!
-111 ? fff00020 13000000      ,702!
-111 ? fff00028 19900000      ,694!
-111 ? fff00040 80008888      ,690!
-111 ? fff00044 00008800      ,698!
-111 ? fff00048 88800000      ,690!
-111 ? fff0004c 00000008      ,698!
-111 ? 005a0000 00000000      ,698!
-
-111 ? 00000000 801fffff      ,696!
-111 ? 00000001 8fffffff      ,694!
-111 ? 00000002 801fffff      ,692!
-
-
-
-
-111 ? c3f0000077777777     2,569
-111 ? c3f0002010000000      ,702!
-111 ? c3f0004040404040      ,690!
-111 ? 00000000801fffff      ,704!
-111 ? 000000018ff00000      ,694!
-111 ? 00000002800cffc0      ,694!
-
-*/
-/*
-    sendDebug(0xC3F00000,*(uint32_t*)0xC3F00000); // A MPCR
-    sendDebug(0xC3F00020,*(uint32_t*)0xC3F00020); // A PACR0
-    sendDebug(0xC3F00040,*(uint32_t*)0xC3F00040); // A OPACR0
-*/
-    /*
-    sendDebug(0xC3F00044,*(uint32_t*)0xC3F00044); // A OPACR1
-    sendDebug(0xC3F00048,*(uint32_t*)0xC3F00048); // A OPACR2*/
-
-/*
-    sendDebug(0xFFF00000,*(uint32_t*)0xFFF00000); // B MPCR
-    sendDebug(0xFFF00020,*(uint32_t*)0xFFF00020); // B PACR0
-    sendDebug(0xFFF00028,*(uint32_t*)0xFFF00028); // B PACR2
-    sendDebug(0xFFF00040,*(uint32_t*)0xFFF00040); // B OPACR0
-    sendDebug(0xFFF00044,*(uint32_t*)0xFFF00044); // B OPACR1
-    sendDebug(0xFFF00048,*(uint32_t*)0xFFF00048); // B OPACR2
-    sendDebug(0xFFF0004C,*(uint32_t*)0xFFF0004C); // B OPACR3
-    sendDebug(*(uint32_t*)0x4000,0);
-*/
-//    volatile uint32_t *FLASH_LMLR = (volatile uint32_t *)0xC3F88004;
-/*
-111 ? 00000000 801fffff      ,704!
-111 ? 00000001 8fffffff      ,694!
-111 ? 00000002 800cffc0      ,690!
-111 ? 00000002 0b603600
-*/
-/*  
-    sendDebug(0,FLASH_LMLR[0]);
-    sendDebug(1,FLASH_LMLR[1]);
-    sendDebug(2,FLASH_LMLR[2]);
-    sendDebug(2,FLASH_LMLR[-1]);
-*/
-
-/*
-    // 0x10040000
-    for (uint32_t i = 0; i < 32; i++)
-    {
-        uint32_t data = 0x10000000;
-        data |= i << 16;
-        writeMAS0(data);
-        sendDebug(i << 16 | 1, readMAS1());
-        sendDebug(i << 16 | 2, readMAS2());
-        sendDebug(i << 16 | 3, readMAS3());
-    }
-*/
-
+    // setTimer(24000000);
+    // while (readTimer())  ;
+    // sendDebug(1,10);
 
     GMLAN_MainLoop();
 

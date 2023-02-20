@@ -307,7 +307,7 @@ static void GMLAN_PackageResponse(void *dataPtr)
 
         do
         {
-            uint8_t toCopy = Len > 7 ? 7 : Len;
+            uint8_t toCopy = (Len > 7) ? 7 : Len;
             Len -= toCopy;
             respMsgs++;
 
