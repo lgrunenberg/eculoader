@@ -16,6 +16,7 @@
 *.id0
 *.id1
 *.nam
+*.til
 
 hostutils/bin2csfile
 hostutils/maintolz77
