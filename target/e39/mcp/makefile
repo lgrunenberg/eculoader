@@ -26,12 +26,16 @@ HEADERPATHS=\
 
 CFLAGS= -std=gnu99 $(TARGPROC) $(SHAREDC) $(CODEFLAGS) $(HEADERPATHS)
 
-.PHONY: all flash debug
+.PHONY: all flash
 
-all : firmware
+all : targetcode firmware
+
+targetcode :
+	@echo
+	@make -C target/
+	@echo
 
 flash : all
-debug : startdebug
 
 SYSOBJS=\
 	obj/startup_stm32f10x_md.o \
@@ -152,18 +156,14 @@ obj/stm32f10x_wwdg.o : Syssup/STM32F10x_StdPeriph_Driver/src/stm32f10x_wwdg.c
 
 firmware : $(ALLOBJS)
 	@$(CC) $(TARGPROC) $(SHAREDC) -Wl,-Map=bin/firmware.map -Wl,--gc-sections -Wl,-Tlink.ld -o bin/firmware.elf $(ALLOBJS)
+	@rm -f obj/mcp_loader.o
 	@$(OBJCOPY) -O binary bin/firmware.elf bin/firmware.bin
 	@$(OBJCOPY) -O ihex bin/firmware.elf bin/firmware.hex
 	@$(SIZE) -B bin/firmware.elf
+	@echo
 
 flash :
-	openocd -f flash.cfg
-
-startdebug :
-	@$(GDB)
-	openocd -f debug.cfg
-
-
+	@openocd -f flash.cfg
 
 clean :
 	@echo Cleaning..
