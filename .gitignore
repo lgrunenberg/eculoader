@@ -11,6 +11,10 @@
 *.lz
 *.vcxproj.user
 
+# IDA projects
+*.i64
+
+
 hostutils/bin2csfile
 hostutils/maintolz77
 target/.private
