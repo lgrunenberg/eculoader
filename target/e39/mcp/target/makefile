@@ -15,8 +15,8 @@ ASFLAGS=
 all : loader
 
 LOADEROBJS=\
-	obj/loader.rel \
-	obj/test.rel
+	obj/loader.rel
+# obj/test.rel
 
 obj/loader.rel : loader.s
 	@$(AS) $(ASFLAGS) -o $@ $<
@@ -24,7 +24,7 @@ obj/loader.rel : loader.s
 obj/test.rel : test.c
 	@$(CC) -c $(CFLAGS) -o $@ $<
 
-# --code-loc 0x40 --data-loc 0x80
+# --code-loc 0xb0 --data-loc 0x40
 loader : $(LOADEROBJS)
 	@echo - - - - - - - - - - - -
 	@echo - Building main loader

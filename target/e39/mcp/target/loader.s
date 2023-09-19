@@ -5,9 +5,8 @@
 ; Notes etc
 
 ; RAM starts at 0040
-; No need for absolute addressing but this was the base in use during development
-; .area SYS (ABS)
-; .org 0x00b0
+.area SYS (ABS)
+.org 0x00b0
 
 ; ; ; ; ; ; ; ; ; ;
 ; CPU osc set to 8 MHz ( bus == 2 MHz )
@@ -47,9 +46,6 @@ LAST_STACK_ADDR  .equ    0x023f ; Last usable stack address
 TEMP_0040        .equ    0x0040 ; Dealing with certain data in stack makes the code explode in size
 TEMP_0041        .equ    0x0041
 
-; Imported symbols
-; .globl _testFunc
-
 ; Exported symbols
 .globl _entry  ; Entry point of this app. -Of no interest to the rest of the code but it's a nice thing to have in the map file
 
@@ -70,14 +66,98 @@ _entry:
 ;    0: * do not use *  (Data is stored BEFORE the stack pointer is decremented. Thus, this is used when calling functions or pushing data)
     ais #-22
 
+    bra     loopEntry_ResetErrCnt
 
+
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;  
+; Another function inside the main loop because.. reasons
+
+; sp: Source address
+; h:X Destination address ( Swapped! )
+; a: Count
+memcpy:
+    psha    ; Push count
+    lda     4, s
+    sta     *TEMP_0040
+    lda     5, s
+    sta     *TEMP_0041
+; SP:
+; 05: SOURCE L  <- To enable bsr trick <- notice me sensei, I will bite you!
+; 04: SOURCE H
+; 03: RETURN L
+; 02: RETURN H
+; 01: Count
+
+cpyLoop:
+    pshh
+    pshx
+    ldhx    *TEMP_0040
+    lda     ,x
+    aix     #1
+    sthx    *TEMP_0040
+    pulx
+    pulh
+    sta     ,x
+    aix     #1
+    dbnz    1, s, cpyLoop
+
+    pula
+    rts
+
+
+; Response handlers - We need these below 0x0100...
+csumError:
+    lda     #0x04
+    bra     stErrResp
+
+; Received length out of bounds
+lenError:
+    lda     #0x20
+
+stErrResp:
+    sta     2, s
+
+; Command error one way or another
+rxErrorSPI:
+rxError:
+; Use internal delay function and wait for 2.2 ms
+; 8 + (3 * 8 * 183 + 8) = 4408 bus cycles
+; (8 MHz cpu == 2 MHz bus)
+; 4408 / 2000000 = 0.002204 = 2.2 ms (Actual count is 4405)
+; Delay 2202.5 micro (2.2 ms)
+    lda     #8
+    ldx     #183
+    sta     COPCTL ; Service watchdog
+    jsr     DELNUS ; Jump!
+
+; TODO: Determine how to signal error
+;   tsx
+;   lda     #0x7f
+;   sta     ,x
+
+; Check remaining error count. Die a fiery death if 0
+    dbnz    19, s, loopEntry_KeepErrCnt
+deathLoop:          ; Wait for watchdog reset
+    bra     deathLoop
+
+; tsx etc takes less space than addressing stack items by offset
+commandOk:
+    tsx
+    incx    ; Slightly naughy but we know stack resides betweent 200 and 23f
+    lda     , x
+    ora     #0x80
+    sta     , x
+
+commandOk_manual:
+
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; Start of a new frame
-loopResetErrCnt:
+loopEntry_ResetErrCnt:
 
     lda     #CONSEC_RX_TRIES   ; Reset Command err
     sta     19, s
 
-loopKeepErrCnt:
+loopEntry_KeepErrCnt:
 
 ; Beware. tsx is sinister. h:x = sp + 1
     tsx           ; Point H:X at spi buffer start
@@ -106,7 +186,7 @@ rxLoop:
 
     lda     *SPSCR    ; Load SPI flags register
     bit     #0x30     ; Check for error conditions; Overflow or mode fault
-    bne     rxError
+    bne     rxErrorSPI
 
     tsta
     bpl     rxLoop    ; Check reception flag
@@ -117,47 +197,6 @@ rxLoop:
     sta     *SPDR
 
     dbnz    17, s, rxLoop ; Decrement counter and continue if not 0
-
-; bra is using a relative 8-bit offset. rxError can't be too far away for some of the other functions
-    bra rxOk
-
-; Received length out of bounds
-lenError:
-    tsx
-    lda     #0x20
-    sta     1, x
-
-; Command error one way or another
-rxError:
-; Use internal delay function and wait for 2.2 ms
-; 8 + (3 * 8 * 183 + 8) = 4408 bus cycles
-; (8 MHz cpu == 2 MHz bus)
-; 4408 / 2000000 = 0.002204 = 2.2 ms (Actual count is 4405)
-; Delay 2202.5 micro (2.2 ms)
-    lda     #8
-    ldx     #183
-    sta     COPCTL ; Service watchdog
-    jsr     DELNUS ; Jump!
-
-; TODO: Determine how to signal error
-;   tsx
-;   lda     #0x7f
-;   sta     ,x
-
-; Check remaining error count. Die a fiery death if 0
-    dbnz    19, s, loopKeepErrCnt
-deathLoop:          ; Wait for watchdog reset
-    bra     deathLoop
-
-commandOk:
-    tsx
-    incx    ; Slightly naughy but we know stack resides betweent 200 and 23f
-    lda     , x
-    ora     #0x80
-    sta     , x
-    bra     loopResetErrCnt
-
-rxOk:
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
@@ -193,7 +232,7 @@ rxOk:
 ; yy 03 - <SAUCE > Write address                      - implemented -
 ; yy 04 - <SAUCE > Jump to arbitrary address          - implemented -
 ; yy 05 - <SAUCE > Identity string                    - implemented -
-; yy 06 - * * * * * * * * * shutdown ? ?
+; yy 06 - <LOADER> Shutdown                           - implemented -
 ; yy 07 - <LOADER> Set flash protection mask          - implemented -
 ; yy 08 - <LOADER> Erase flash                        - missing -
 ; YY 09 - <LOADER> Upload block of data / write data  - missing -
@@ -201,21 +240,24 @@ rxOk:
 ; SAUCE  = Commands that are present in the loader and boot sauce mode
 ; LOADER = Commands that are only available in the loader
 ; yy     = Stepper, 06 / 19 hex
+;
+; Todo:
+; Determine if commands 02-05 are really needed in the loader? Can easily make it 128 bytes otherwise
 
-    dbnza    checkRamRead
-
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 1 - Idle message
+    dbnza    checkRamRead
+
 ; yy 01     00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    jmp     *commandOk
 
-    bra     commandOk
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; 2 - RAM Read
 checkRamRead:
     dbnza    checkRamWrite
 
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; 2 - RAM Read
 ; yy 02 HH LL NN     00 00 00 00 00 00 00 00 00 00 00
 ; HH LL: 16-bit address
 ; NN   : Count 1 to 10
@@ -226,11 +268,11 @@ checkRamRead:
     cmp     #11
     bcc     lenError ; 11 or more bytes (error)
 ; Copy data
-    pshh         ; Push source address
-    pshx
+    pshx         ; Push source address
+    pshh
     tsx          ; Load destination address
     aix     #7   ; Increment past pushed address, stepper, command, address and length
-    bsr     memcpy
+    jsr     *memcpy
     ais     #2
 ; Flag OK and store checksum
     tsx
@@ -240,17 +282,15 @@ checkRamRead:
     bsr     getChecksum
     sta     ,x   ; Store checksum
 
-    bra     loopResetErrCnt
+; Must complete response before checksumming...
+    jmp     *commandOk_manual
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-
+; 3 - RAM Write
 checkRamWrite:
     dbnza    checkRamRun
 
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; 3 - RAM Write
 ; yy 03 HH LL NN     DD DD DD DD DD DD DD DD DD DD CC
 ; HH LL: 16-bit address
 ; NN   : Count 1 to 10
@@ -266,14 +306,12 @@ checkRamWrite:
     bsr     getChecksum
     cmp     ,x
     beq     wrChecksumOk
-    lda     #0x04
-    sta     2, s
-    bra     rxError
+    jmp     *rxError
 wrChecksumOk:
 
     aix     #-10
-    pshh
     pshx
+    pshh
 
     lda     5, s
     psha
@@ -281,68 +319,88 @@ wrChecksumOk:
     ldx     6, s
 
     lda     7, s ; Read len
-    bsr     memcpy
+    jsr     *memcpy
 
     ais     #2
 
-commandOkOOR:
-    bra     commandOk
-
+    jmp     *commandOk
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; Relative addressing so must be fairly close...
-
-jumprxError:
-    bra rxError
-
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-
+; 4 - RAM Execute
 checkRamRun:
     dbnza    checkIdentity
 
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; 4 - RAM Execute
 ; yy 04 HH LL - Jump to address
 ; HH LL: 16-bit address
-    jmp     ,x
+    jsr     ,x
+    jmp     *commandOk ; Highly unlikely
+
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; 5 - Loader identification
+checkIdentity:
+    dbnza   checkShutdown
 
-; sp: Source address
-; h:X Destination address
-; a: Count
-memcpy:
-    psha    ; Push count
-    lda     5, s
-    sta     *TEMP_0040
-    lda     4, s
-    sta     *TEMP_0041
-; SP:
-; 05: SOURCE H
-; 04: SOURCE L
-; 03: RETURN L
-; 02: RETURN H
-; 01: Count
+    bsr     idStr_e     ; Ugly trick to get absolute address of string
+idStr:
+.ascii "TXSUITE_E39MCP" ; <- Return address points at this string
+idStr_e:
 
-cpyLoop:
+    tsx
+    aix     #4                 ; Increment past two pushed bytes, stepper and command
+    lda     #(idStr_e - idStr) ; Number of chars
 
+    jsr     *memcpy
+    ais     #2
+
+    jmp     *commandOk
+
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; 6 - Shutdown
+checkShutdown:
+    dbnza    checkProtect
+
+    tsx
+    bsr     getChecksum
+    cmp     ,x
+    beq     exChecksumOk
+    jmp     *rxError
+exChecksumOk:
+    jmp     *deathLoop
+
+
+
+
+
+
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; 7 - Flash protection
+checkProtect:
+    dbnza    jumprxError
+
+; yy 07 MM       00 00 00 00 00 00 00 00 00 00 00 00 00  
+; MM: Protection mask
+    ; H:X contains MM:00
     pshh
-    pshx
-
-    ldhx    *TEMP_0040
-    lda     ,x
-    aix     #1
-    sthx    *TEMP_0040
-
-    pulx
-    pulh
-    sta     ,x
-    aix     #1
-
-    dbnz    1, s, cpyLoop
-
     pula
+    sta     FLBPR
+    jmp     *commandOk
 
-    rts
+
+
+
+
+
+
+jumprxError:
+    jmp rxError
+
+
+
+
 
 ; Checksum
 ; h:x source  (h:x will point at the next byte after the last checksummed one)
@@ -358,50 +416,3 @@ moreCsum:
     dbnz    1, s, moreCsum
     ais     #1
     rts
-
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-
-checkIdentity:
-    dbnza    checkProtect
-
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; 5 - Loader identification
-
-    bsr     afterIdStr  ; Ugly trick to get absolute address of string
-.ascii "TXSUITE_E39MCP" ; Return address points at this string
-afterIdStr:
-; SP:
-; 03: PCL   (bsr will push PCL, then PCH)
-; 02: PCH
-; 01: PCL   (Copied)
-
-    ldx     2, s
-    pshx
-
-    tsx
-    aix     #5  ; Increment past three pushed bytes, stepper and command
-    lda     #14 ; Number of chars
-
-    bsr     memcpy
-    ais     #3
-
-    bra commandOkOOR
-
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-
-checkProtect:
-    deca      ; 6 -> 7
-    dbnza    jumprxError
-
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; 7 - Flash protection
-; yy 07 MM       00 00 00 00 00 00 00 00 00 00 00 00 00  
-; MM: Protection mask
-    ; H:X contains MM:00
-    pshh
-    pula
-    sta     FLBPR
-    bra     commandOkOOR
-
-
-

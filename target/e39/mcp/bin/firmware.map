@@ -3584,7 +3584,7 @@ Linker script and memory map
                 0x080009d8                readGMString
  .text          0x08000a30      0x114 obj/mcp_loader.o
                 0x08000a30                mcp_loader
-                0x08000b3f                mcp_loaderSize
+                0x08000b40                mcp_loaderSize
  .text.crcBuffer_16
                 0x08000b44       0x2c obj/crc.o
                 0x08000b44                crcBuffer_16
