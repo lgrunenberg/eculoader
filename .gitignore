@@ -13,6 +13,7 @@
 
 hostutils/bin2csfile
 hostutils/maintolz77
+target/.private
 
 # Exclusions from above
 !mpc5566/out/loader.bin
