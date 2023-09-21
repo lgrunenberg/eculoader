@@ -65,6 +65,7 @@ SYSOBJS=\
 	obj/stm32f10x_wwdg.o
 
 ALLOBJS=\
+	obj/mcp_trgbin.o \
 	obj/main.o \
 	obj/miscfunc.o \
 	obj/mcp.o \
@@ -83,11 +84,13 @@ obj/main.o : main.c
 obj/miscfunc.o : miscfunc.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+obj/mcp_trgbin.o : mcp_trgbin.s
+	@$(CC) $(CFLAGS) -c $< -o $@
 obj/mcp.o : mcp.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 obj/mcp_commands.o : mcp_commands.c
 	@$(CC) $(CFLAGS) -c $< -o $@
-obj/mcp_loader.o : mcp_loader.s
+obj/mcp_loader.o : mcp_loader.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 obj/crc.o : crc.c
@@ -156,7 +159,7 @@ obj/stm32f10x_wwdg.o : Syssup/STM32F10x_StdPeriph_Driver/src/stm32f10x_wwdg.c
 
 firmware : $(ALLOBJS)
 	@$(CC) $(TARGPROC) $(SHAREDC) -Wl,-Map=bin/firmware.map -Wl,--gc-sections -Wl,-Tlink.ld -o bin/firmware.elf $(ALLOBJS)
-	@rm -f obj/mcp_loader.o
+	@rm -f obj/mcp_trgbin.o
 	@$(OBJCOPY) -O binary bin/firmware.elf bin/firmware.bin
 	@$(OBJCOPY) -O ihex bin/firmware.elf bin/firmware.hex
 	@$(SIZE) -B bin/firmware.elf

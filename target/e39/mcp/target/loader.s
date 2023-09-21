@@ -45,6 +45,10 @@ LAST_STACK_ADDR  .equ    0x023f ; Last usable stack address
 
 TEMP_0040        .equ    0x0040 ; Dealing with certain data in stack makes the code explode in size
 TEMP_0041        .equ    0x0041
+M_FLAGS          .equ    0x0042
+M_RXCNT          .equ    0x0043
+M_RETS           .equ    0x0044
+
 
 ; Exported symbols
 .globl _entry  ; Entry point of this app. -Of no interest to the rest of the code but it's a nice thing to have in the map file
@@ -54,20 +58,32 @@ TEMP_0041        .equ    0x0041
 ; App
 
 _entry:
-; Beware. txs is sinister. sp = h:x - 1
-    ldhx    #(LAST_STACK_ADDR + 1)
-    txs
 
 ; Stack frame
 ;   19: Reset countdown (How many consecutive unrecognised messages to accept before going into reset mode)
-;   18: rx fault flag   (Unused atm)
+;   18: rx flags        (Unused atm)
 ;   17: rx count        (Number of bytes left to read before a complete frame has been assembled)
 ; 1-16: spi data        (SPI frame. tsx has a nifty trick up its sleeve so it'll automagically point here when using said instruction)
 ;    0: * do not use *  (Data is stored BEFORE the stack pointer is decremented. Thus, this is used when calling functions or pushing data)
-    ais #-22
+
+; Beware. txs is sinister. sp = h:x - 1
+
+    ldhx    #(LAST_STACK_ADDR - 21)
+    txs
+
+; Preconfigure cpu speed
+; Not entirely sure what to do here...
+; Recovery will set this value at boot up if the main firmware is missing but it's seemingly left alone if you directly enter the sauce mode from main
+    mov     #0x08, *CPUSPD
+
+; Prep tim1 for our use
+; Freq == 2 Mhz / div 2 (1 MHz)
+; Mod == 2000
+    mov     #0x01, *T1SC    ; 2 MHz bus / 2 == 1 MHz
+    ldhx    #2000
+    sthx    *T1MOD
 
     bra     loopEntry_ResetErrCnt
-
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;  
 ; Another function inside the main loop because.. reasons
@@ -110,6 +126,7 @@ csumError:
     lda     #0x04
     bra     stErrResp
 
+addrError:
 ; Received length out of bounds
 lenError:
     lda     #0x20
@@ -130,13 +147,10 @@ rxError:
     sta     COPCTL ; Service watchdog
     jsr     DELNUS ; Jump!
 
-; TODO: Determine how to signal error
-;   tsx
-;   lda     #0x7f
-;   sta     ,x
+
 
 ; Check remaining error count. Die a fiery death if 0
-    dbnz    19, s, loopEntry_KeepErrCnt
+    dbnz    *M_RETS, loopEntry_KeepErrCnt
 deathLoop:          ; Wait for watchdog reset
     bra     deathLoop
 
@@ -150,21 +164,20 @@ commandOk:
 
 commandOk_manual:
 
+spiTimeoutErr:
+
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; Start of a new frame
 loopEntry_ResetErrCnt:
 
-    lda     #CONSEC_RX_TRIES   ; Reset Command err
-    sta     19, s
+    mov     #CONSEC_RX_TRIES, *M_RETS
 
 loopEntry_KeepErrCnt:
 
 ; Beware. tsx is sinister. h:x = sp + 1
-    tsx           ; Point H:X at spi buffer start
-
-    lda     #16   ; Reset rx count
-    sta     16, x
-    clr     17, x ; Clear rx fault
+    tsx                    ; Point H:X at spi buffer start
+    mov     #16, *M_RXCNT  ; Reset count
+    clr     *M_FLAGS       ; Clear rx flags
 
 ; Have to disable and enable the controller to enable a nifty coding hack
     bclr    #1, *SPCR ; Disable SPI
@@ -182,25 +195,47 @@ loopEntry_KeepErrCnt:
 ; ; ; ; ; RX/TX loop
 rxLoop:
 
+    lda     *M_FLAGS
+    bne     inRxLoop
+
+    bset    #4, *T1SC  ; Reset counter
+    lda     *T1SC      ; Read just to reset latch
+    bclr    #7, *T1SC  ; Clear overflow bit
+
+inRxLoop:
+
     sta     COPCTL    ; Pet watchdog. There, there. Nice doggo
+
+    ; Check overflow / if more than 2 ms has passed since the last received byte (within this frame)
+    ; That means we're somehow out of sync or the host stopped sending for one reason or another. Reset and wait for a new frame
+    ; Can't use error counter since we could see in excess of 15 state resets 
+    brset   #7, *T1SC, loopEntry_ResetErrCnt
 
     lda     *SPSCR    ; Load SPI flags register
     bit     #0x30     ; Check for error conditions; Overflow or mode fault
     bne     rxErrorSPI
-
     tsta
     bpl     rxLoop    ; Check reception flag
-    ; Check for timeout?
+
+    ; Store any random junk in flag location to indicate "At least one byte received"
+    sta     *M_FLAGS
 
     mov     *SPDR, x+ ; Read SPI and store received byte
     lda     ,x        ; Read next byte to send
     sta     *SPDR
 
-    dbnz    17, s, rxLoop ; Decrement counter and continue if not 0
+    dbnz    *M_RXCNT, inRxLoop ; Decrement counter and continue if not 0
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; Command interpretation
+
+    tsx
+    bsr     getChecksum
+    cmp     ,x
+    beq     msgSumOk
+    jmp     *csumError
+msgSumOk:
 
 ; ; ; ; ; Data done
 ; RX:
@@ -234,9 +269,9 @@ rxLoop:
 ; yy 05 - <SAUCE > Identity string                    - implemented -
 ; yy 06 - <LOADER> Shutdown                           - implemented -
 ; yy 07 - <LOADER> Set flash protection mask          - implemented -
-; yy 08 - <LOADER> Erase flash                        - missing -
-; YY 09 - <LOADER> Upload block of data / write data  - missing -
-;
+; yy 08 - <LOADER> Erase flash                        - implemented -
+; YY 09 - <LOADER> Write data in buffer               - missing -
+
 ; SAUCE  = Commands that are present in the loader and boot sauce mode
 ; LOADER = Commands that are only available in the loader
 ; yy     = Stepper, 06 / 19 hex
@@ -247,7 +282,7 @@ rxLoop:
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 1 - Idle message
-    dbnza    checkRamRead
+    dbnza   checkRamRead
 
 ; yy 01     00 00 00 00 00 00 00 00 00 00 00 00 00 00
     jmp     *commandOk
@@ -256,7 +291,7 @@ rxLoop:
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 2 - RAM Read
 checkRamRead:
-    dbnza    checkRamWrite
+    dbnza   checkRamWrite
 
 ; yy 02 HH LL NN     00 00 00 00 00 00 00 00 00 00 00
 ; HH LL: 16-bit address
@@ -289,7 +324,7 @@ checkRamRead:
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 3 - RAM Write
 checkRamWrite:
-    dbnza    checkRamRun
+    dbnza   checkRamRun
 
 ; yy 03 HH LL NN     DD DD DD DD DD DD DD DD DD DD CC
 ; HH LL: 16-bit address
@@ -297,19 +332,13 @@ checkRamWrite:
 ; DD   : Data
 ; CC   : Checkum-8 of the whole request, byte [0] to [14]
     lda     5, s     ; Read len
-    beq     lenError ; 0-len
+    beq     lenErrorOOR ; 0-len
     cmp     #11
-    bcc     lenError ; 11 or more bytes (error)
+    bcc     lenErrorOOR ; 11 or more bytes (error)
 
-; Verify checksum of received data
     tsx
-    bsr     getChecksum
-    cmp     ,x
-    beq     wrChecksumOk
-    jmp     *rxError
-wrChecksumOk:
+    aix     #5
 
-    aix     #-10
     pshx
     pshh
 
@@ -325,11 +354,32 @@ wrChecksumOk:
 
     jmp     *commandOk
 
+lenErrorOOR:
+    jmp     *lenError
+
+
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; Checksum
+; h:x source  (h:x will point at the next byte after the last checksummed one)
+; a: n Bytes
+; Ret: a = checksum
+getChecksum:
+    lda     #15  ; Number of bytes (Always 15)
+    psha
+    clra
+moreCsum:
+    add     ,x
+    aix     #1
+    dbnz    1, s, moreCsum
+    ais     #1
+    rts
+
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 4 - RAM Execute
 checkRamRun:
-    dbnza    checkIdentity
+    dbnza   checkIdentity
 
 ; yy 04 HH LL - Jump to address
 ; HH LL: 16-bit address
@@ -360,28 +410,17 @@ idStr_e:
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 6 - Shutdown
 checkShutdown:
-    dbnza    checkProtect
-
-    tsx
-    bsr     getChecksum
-    cmp     ,x
-    beq     exChecksumOk
-    jmp     *rxError
-exChecksumOk:
+    dbnza   checkProtect
     jmp     *deathLoop
-
-
-
-
-
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 7 - Flash protection
 checkProtect:
-    dbnza    jumprxError
+    dbnza   checkErase
 
-; yy 07 MM       00 00 00 00 00 00 00 00 00 00 00 00 00  
+; yy 07 MM       00 00 00 00 00 00 00 00 00 00 00 00 00
+ 
 ; MM: Protection mask
     ; H:X contains MM:00
     pshh
@@ -389,30 +428,51 @@ checkProtect:
     sta     FLBPR
     jmp     *commandOk
 
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; 8 - Erase flash
+checkErase:
+    dbnza   checkWrite
 
+; yy 08 HH LL       00 00 00 00 00 00 00 00 00 00 00 00 
+; HH LL: Start erase from 
 
+; Set Page erase (0x00)
+; The other mode is 0x40, full erase, but we don't want it
+    clr     *CTRLBYT
+    jsr     ERARNGE
+    jmp     *commandOk
 
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; 9 - Write flash
+checkWrite:
+    dbnza   jumprxError
 
+; Reminder of index in stack:
+; 01 02 03 04 05
+; yy 09 HH LL NN    00 00 00 00 00 00 00 00 00 00 00 00 
+; HH LL: Start write from (must be aligned to nearest 32)
+; NN   : Number of bytes
 
+    ; Not fully checked! What you want to prevent is row overlap
+
+    lda     5, s        ; Read len
+    beq     lenErrorOOR ; 0-len
+    cmp     #32
+    bcc     lenErrorOOR ; 32 or more bytes (error)
+
+    sthx    *LADDR  ; Store initial last address
+    deca            ; From length to last index / address
+
+; Check if LO + last idx overflows
+    add     4, s
+    sta     *(LADDR + 1)
+    bcc     doWr
+    inc     *(LADDR + 0)  ; Increment HI
+doWr:
+    jsr     PRGRNGE
+    jmp     *commandOk
 
 jumprxError:
-    jmp rxError
-
-
-
-
-
-; Checksum
-; h:x source  (h:x will point at the next byte after the last checksummed one)
-; a: n Bytes
-; Ret: a = checksum
-getChecksum:
-    lda     #15  ; Number of bytes (Always 15)
-    psha
-    clra
-moreCsum:
-    add     ,x
-    aix     #1
-    dbnz    1, s, moreCsum
-    ais     #1
-    rts
+    jmp     *rxError

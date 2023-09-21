@@ -14,6 +14,7 @@ SPDR      .equ    0x000f    ; SPI Data register
 
 ; TIM1 registers
 T1SC      .equ    0x0020    ; TIM1 Status and Control register
+T1MOD     .equ    0x0023    ; TIM1 Modulo register
 T1SC2     .equ    0x0030    ; TIM1 Channel 2 Status and Control register
 
 ; TIM2 registers
@@ -47,6 +48,7 @@ DELNUS    .equ    0x280C    ; Delay routine
 ROM_STRUC .equ    0x0080    ; Base of structure
 CTRLBYT   .equ    (ROM_STRUC + 0x08)  ; Control byte setting erase size
 CPUSPD    .equ    (ROM_STRUC + 0x09)  ; CPU speed, nearest integer in MHz
+LADDR     .equ    (ROM_STRUC + 0x0a)  ; Hi byte, Last address of a 16-bit range
 LADDR_H   .equ    (ROM_STRUC + 0x0a)  ; Hi byte, Last address of a 16-bit range
 LADDR_L   .equ    (ROM_STRUC + 0x0b)  ; Lo byte, Last address of a 16-bit range
 ROM_BUF   .equ    (ROM_STRUC + 0x0c)  ; First location of DATA array

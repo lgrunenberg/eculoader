@@ -1,8 +1,9 @@
+////////////////////////////////////////////////////////////////////////////////////
+// 
 #include "common.h"
 #include "crc.h"
 #include "mcp.h"
 
-// rand
 #include <stdlib.h>
 
 #include "stm32f10x.h"
@@ -32,6 +33,8 @@ uint8_t flashBuf[16 * 1024];
 
 uint8_t lastCommSts = 0;
 
+uint8_t waitExtra = 0;
+
 
 void printFrame(const uint8_t *snd, const uint8_t *rec) {
     printf("Snd: ");
@@ -50,6 +53,13 @@ void printFrame(const uint8_t *snd, const uint8_t *rec) {
     for (int i = 0; i < 16; i++)
         printf("%c ", rec[i]);
     printf(" )\n\r");*/
+}
+
+void csumFrame(uint8_t *snd) {
+    uint8_t checksum = 0;
+    for (uint32_t i = 0; i < 15; i++)
+        checksum += snd[ i ];
+    snd[15] = (uint8_t) checksum;
 }
 
 void sendSPIFrame_noWait(const uint8_t *snd, uint8_t *rec, const int nBytes) {
@@ -78,26 +88,29 @@ void sendSPIFrame_noWait(const uint8_t *snd, uint8_t *rec, const int nBytes) {
         dwtWait( 48 * 100 );
     }
 
-    GPIOB->BSRR = (1UL << 12); // Set CS high
-
     // 82.5 us
     dwtWait( 48 * 83 );
+
+    GPIOB->BSRR = (1UL << 12); // Set CS high
 
     printFrame( m_snd, m_rec );
 }
 
-uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes) {
+uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes, const uint8_t pFrame) {
     const uint8_t *m_snd = snd;
     const uint8_t *m_rec = rec;
     uint32_t timo = 0;
 
     static int firstTransm = 1;
     static uint32_t oldPin = 0;
+
+    uint32_t retVal = 1;
+
     if (firstTransm) {
         firstTransm = 0;
         oldPin = GPIOA->IDR & (1UL << 8);
     } else {
-        set_Timeout(500);
+        set_Timeout( 50 );
         uint32_t nowPin;
         do {
             nowPin = GPIOA->IDR & (1UL << 8);
@@ -105,19 +118,21 @@ uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes) {
         
         if (timo) {
             printf("Timeout!\n\r");
-            return 0;
+            retVal = 0;
+            // Pin could switch two times if state is reset in the middle of a frame
+            // return 0;
         }
 
         oldPin = nowPin;
         // while ((GPIOA->IDR & (1 << 8)) == oldPin && !get_Timeout())  ;
     }
 
-    printf("Pin: %0x (tim: %x)\n\r", (uint16_t)(GPIOA->IDR & (1 << 8)), (uint16_t)timo);
+    // printf("Pin: %0x (tim: %x)\n\r", (uint16_t)(GPIOA->IDR & (1 << 8)), (uint16_t)timo);
 
     GPIOB->BRR = (1UL << 12); // Set CS low
 
     // 5 us
-    dwtWait( 48 * 5 );
+    // dwtWait( 48 * 5 );
 
     // Wait for TX empty to be set
     while (!(SPI2->SR & SPI_I2S_FLAG_TXE))   ;
@@ -131,17 +146,28 @@ uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes) {
         *rec++ = (uint8_t)SPI2->DR;
 
         // Wait 100 micro between each transmission
-        dwtWait( 48 * 100 );
+        // dwtWait( 48 * 100 );
+
+        // 25 bare minimum
+        dwtWait( 48 * 50 );
+
+/*
+        if (waitExtra != 0) {
+            sleep( 2 );
+            printf("Wait..\n\r");
+            waitExtra = 0;
+        }*/
     }
+
+    // 82.5 us
+    // dwtWait( 48 * 83 );
 
     GPIOB->BSRR = (1UL << 12); // Set CS high
 
-    // 82.5 us
-    dwtWait( 48 * 83 );
+    if (pFrame)
+        printFrame( m_snd, m_rec );
 
-    printFrame( m_snd, m_rec );
-
-    return 1;
+    return retVal;
 }
 
 static inline uint16_t crcFrame(uint8_t *buf) {
@@ -250,7 +276,7 @@ void getBootDescs(void) {
     printf("\n\r-- Fetching HEX descriptors --\n\r");
     while (cntr < 4) {
         snd[ 1 ] = (uint8_t) cntr++;
-        sendSPIFrame( snd, rec, 16 );
+        sendSPIFrame( snd, rec, 16, 1 );
     }
 }
 
@@ -260,7 +286,7 @@ void prepErase(void) {
     printf("\n\r-- Prep erase --\n\r");
     while (cntr < 4) {
         snd[ 1 ] = (uint8_t) cntr++;
-        sendSPIFrame( snd, rec, 16 );
+        sendSPIFrame( snd, rec, 16, 1 );
     }
 }
 
@@ -270,7 +296,7 @@ void testErase(void) {
     printf("\n\r-- Test erase --\n\r");
     while (cntr < 8) {
         snd[ 1 ] = (uint8_t) cntr++;
-        sendSPIFrame( snd, rec, 16 );
+        sendSPIFrame( snd, rec, 16, 1 );
     }
 }
 
@@ -293,7 +319,8 @@ void enterSecretBoot(void) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        sendSPIFrame( snd, rec, 16 );
+        csumFrame( snd );
+        sendSPIFrame( snd, rec, 16, 1 );
         // sleep ( 5 );
     }
 }
@@ -301,7 +328,8 @@ void enterSecretBoot(void) {
 void sendSecretPing(void) {
     uint8_t rec[16], snd[16] = { 0x00, 0x01 };
     bootSecretStep( snd );
-    sendSPIFrame( snd, rec, 16 );
+    csumFrame( snd );
+    sendSPIFrame( snd, rec, 16, 1 );
 }
 
 
@@ -321,7 +349,8 @@ void sauceReadAddress(const uint32_t address, const uint8_t count) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        sendSPIFrame( snd, rec, 16 );
+        csumFrame( snd );
+        sendSPIFrame( snd, rec, 16, 1 );
     }
 }
 
@@ -334,7 +363,8 @@ void jumpRam(const uint32_t address) {
     snd[3] = (uint8_t)address;
 
     bootSecretStep( snd );
-    sendSPIFrame( snd, rec, 16 );
+    csumFrame( snd );
+    sendSPIFrame( snd, rec, 16, 1 );
 }
 
 
@@ -346,6 +376,36 @@ void readGMString(void) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        sendSPIFrame( snd, rec, 16 );
+        csumFrame( snd );
+        sendSPIFrame( snd, rec, 16, 1 );
+    }
+}
+
+// < XX 06 > Exit loader
+void exitLoader(void) {
+    uint8_t rec[16], snd[16] = { 0x19, 0x06 };
+    int cnt = 10;
+    printf("\n\r-- Exit loader --\n\r");
+
+    while (cnt--) {
+        bootSecretStep( snd );
+        csumFrame( snd );
+        sendSPIFrame( snd, rec, 16, 1 );
+    }
+}
+
+// < XX 07 > Set flash protection
+void setFlashProt(const uint8_t msk) {
+    uint8_t rec[16], snd[16] = { 0x19, 0x07 };
+    int cnt = 10;
+
+    snd[2] = msk;
+
+    printf("\n\r-- Set protection --\n\r");
+
+    while (cnt--) {
+        bootSecretStep( snd );
+        csumFrame( snd );
+        sendSPIFrame( snd, rec, 16, 1 );
     }
 }
