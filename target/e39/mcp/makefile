@@ -77,7 +77,6 @@ ALLOBJS=\
 	$(SYSOBJS)
 
 
-
 # Misc / main code
 obj/main.o : main.c
 	@$(CC) $(CFLAGS) -c $< -o $@
