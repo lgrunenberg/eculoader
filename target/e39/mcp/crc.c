@@ -53,5 +53,5 @@ uint16_t crcBuffer_16(
     const int      nBytes,
           uint16_t currCRC)
 {
-    return crcBuffer( data, nBytes, currCRC, CRC_TAB );;
+    return crcBuffer( data, nBytes, currCRC, CRC_TAB );
 }
