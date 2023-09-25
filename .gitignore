@@ -24,3 +24,6 @@ target/.private
 
 # Exclusions from above
 !mpc5566/out/loader.bin
+!target/e39/mcp/bin/firmware.bin
+!target/e39/mcp/bin/firmware.elf
+!target/e39/mcp/target/bin/loader.bin
