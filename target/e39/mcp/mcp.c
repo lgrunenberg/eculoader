@@ -11,8 +11,14 @@
 #include "stm32f10x_spi.h"
 
 
+asm (
+".section .rodata\n.global mcp_bin\n.global mcp_binSz\n"
+"mcp_bin:\n.incbin \"compbin.bin\"\n"
+"mcp_binSz: .long (mcp_binSz - mcp_bin)\n"
+);
 
-
+extern const uint8_t mcp_bin[];
+extern const uint32_t mcp_binSz;
 
 
 
@@ -24,8 +30,51 @@ extern void set_Timeout(const uint16_t ms);
 
 
 
-#define MAX_BYTES  ( 10 )
-#define RAM_PREADDR  ( 0x00b0 )
+
+/*
+Some specs
+SPI freq: 1 MHz
+
+
+FIRMWARE mode:
+5 us CS hold
+8 + 100 us / byte
+82.5 us CS post hold
+100 us cooldown between frames
+
+== 1915.5 us / frame ==
+
+
+
+
+
+Recovery / bootloader (pin-polled mode):
+_NO_ CS hold
+8 + 50 us / byte (Tested working down to 8 + 25 us)
+_NO_ CS post hold
+_NO_ cooldown (you read the pin to determine when it's ready)
+
+== 928 us / frame - THEORETICAL - ==
+You'll obv never see this since it has to process the request, reset counters etc etc but 10 read bytes / 950 us seem possible
+
+
+e39 specific:
+SPI A CS0 -> hc08 MCP
+SPI A CS1 -> PIC12F MCU
+
+SPI B various TPIC chips. Haven't really investigated since they're not of much interest
+
+
+
+*/
+
+
+
+
+
+
+
+
 
 void uploadData(const uint32_t addr, const uint8_t *data, const uint32_t len) {
     uint32_t address = addr;
@@ -59,70 +108,6 @@ void uploadData(const uint32_t addr, const uint8_t *data, const uint32_t len) {
     }
 }
 
-void mcpUploadTest(void) {
-    uint32_t address = RAM_PREADDR;
-    uint32_t bytesLeft = mcp_loaderSize;
-    uint8_t snd[16] = { 0x19, 0x03 };
-    uint8_t rec[16];
-    uint8_t *dPtr = mcp_loader;
-
-    readGMString();
-
-    printf("\n\r-- Test upload of loader --\n\r");
-
-    while (bytesLeft > 0) {
-        uint32_t thisSize = (bytesLeft > MAX_BYTES) ? MAX_BYTES : bytesLeft;
-        uint32_t checksum = 0;
-        
-        snd[2] = (uint8_t)(address>>8);
-        snd[3] = (uint8_t)address;
-        snd[4] = (uint8_t)thisSize;
-
-        for (uint32_t i = 0; i < thisSize; i++)
-            snd[ 5 + i ] = *dPtr++;
-
-        address += thisSize;
-        bytesLeft -= thisSize;
-
-        bootSecretStep( snd );
-
-        for (uint32_t i = 0; i < 15; i++)
-            checksum += snd[ i ];
-        snd[15] = (uint8_t) checksum;
-
-        sendSPIFrame( snd, rec, 16 , 1 );
-    }
-
-    jumpRam( RAM_PREADDR );
-
-    sauceReadAddress( 0xec00, 9 );
-
-    readGMString();
-
-    for (int i = 0; i < 16; i++)
-        snd[ i ] = rand(); // (uint8_t)i;
-    snd[ 0 ] = rand();
-    uploadData(0x60, snd, 16);
-    uploadData(0x60, snd, 16);
-
-    sleep( 500 );
-
-    sauceReadAddress( 0x60, 10 );
-
-    // setFlashProt( 0xff );
-
-
-    // sleep( 250 );
-
-    // waitExtra = 1;
-
-    setFlashProt( 0xff );
-
-    // readGMString();
-
-    // readFlashBoot();
-    // readFlashBoot();
-}
 
 
 // < XX 02 > Read anything in addressable memory space
@@ -140,7 +125,7 @@ uint32_t ldrReadAddr(const uint32_t address, const uint8_t count, uint8_t *dat, 
     }
 
     bootSecretStep( snd );
-    csumFrame( snd );
+    mcp_ChecksumFrame( snd );
 
     if ( !sendSPIFrame( snd, rec, 16, pFrame ) ) {
         printf("ldrReadAddr: sendSPIFrame err\n\r");
@@ -156,13 +141,13 @@ uint32_t ldrReadAddr(const uint32_t address, const uint8_t count, uint8_t *dat, 
 uint32_t ldrIdle(uint8_t *rec) {
     uint8_t snd[16] = { 0x00, 0x01 };
     bootSecretStep( snd );
-    csumFrame( snd );
+    mcp_ChecksumFrame( snd );
     return sendSPIFrame( snd, rec, 16, 0 );
 }
 
 // Snd: 19 02 00 60 0a 00 00 00 00 00 00 00 00 00 00 85
 // Rec: 06 82 00 60 0a d9 2d cf 46 29 04 b4 78 d8 68 a6
-uint32_t dumpOk(const uint32_t addr, const uint32_t len, const uint8_t *buf) {
+uint32_t dumpOk(const uint16_t addr, const uint8_t len, const uint8_t *buf) {
     // return ((buf[2] << 8 | buf[3]) == addr && buf[4] == len && buf[1] == 0x82) ? 1 : 0;
 
     if (buf[1] != 0x82) {
@@ -170,15 +155,13 @@ uint32_t dumpOk(const uint32_t addr, const uint32_t len, const uint8_t *buf) {
         return 0;
     }
 
-    uint32_t tmpAddr = buf[2] << 8 | buf[3];
-
-    if (tmpAddr != addr) {
-        printf("dumpOk: error addr (%04x %04x)\n\r", (uint16_t)tmpAddr, (uint16_t)addr);
+    if ((buf[2] << 8 | buf[3]) != addr) {
+        printf("dumpOk: error addr (%04x %04x)\n\r", (buf[2] << 8 | buf[3]), addr);
         return 0;
     }
 
     if (buf[4] != len) {
-        printf("dumpOk: error len (%u : %u)\n\r", buf[4], (uint16_t)len);
+        printf("dumpOk: error len (%u : %u)\n\r", buf[4], len);
         return 0;
     }
 
@@ -192,7 +175,6 @@ uint32_t dumpOk(const uint32_t addr, const uint32_t len, const uint8_t *buf) {
         return 0;
     }
 
-
     return 1;
 }
 
@@ -204,7 +186,26 @@ uint32_t memCompare(const uint8_t *bufA, const uint8_t *bufB, const uint32_t len
 }
 
 
+uint32_t failCnt1r0 = 0;
+uint32_t failCnt1r1 = 0;
+uint32_t failCnt2 = 0;
+uint32_t failCnt3 = 0;
+uint32_t failCnt4 = 0;
 
+uint32_t overFlow1 = 0;
+uint32_t overFlow2 = 0;
+uint32_t failCnt = 0;
+uint32_t succCnt = 0;
+uint32_t bytesTransf = 0;
+
+static void printErrStats(void) {
+    printf("f0r0 %9lu, f0r1 %9lu\n\r", failCnt1r0, failCnt1r1);
+    printf("f2   %9lu, f3   %9lu, f4 %9lu\n\r", failCnt2, failCnt3, failCnt4);
+    printf("ovf1 %9lu, ovf2 %9lu\n\r", overFlow1, overFlow2);
+    printf("Fail counter   : %lu\n\r", failCnt);
+    printf("Success counter: %lu\n\r", succCnt);
+    printf("Byte count     : %lu\n\r", bytesTransf);
+}
 
 uint32_t readChunk(uint32_t startAddr, uint32_t totLen, uint8_t *buf) {
 
@@ -219,18 +220,29 @@ uint32_t readChunk(uint32_t startAddr, uint32_t totLen, uint8_t *buf) {
     uint32_t lastStart = startAddr;
     uint32_t lastLen = len;
 
+    uint32_t bufLim = totLen;
+    uint32_t bufCnt = 0;
+
     while (totLen > 0) {
 
+sendRead:
         if (totLen < len)
             len = totLen;
 
-sendRead:
         // Failed due to frame sync or no pin toggle
-        if ( !ldrReadAddr(startAddr, len, tmp, 0 ) ) {
-            printf("Fail 1\n\r");
+        if ( !ldrReadAddr( startAddr, len, tmp, 0 ) || (rand() % 100) == 50 ) {
+            
+            if ( restart == 0 ) { /* printf("Fail 1 ( 0 )\n\r"); */ failCnt1r0++; }
+            else {                /* printf("Fail 1 ( 1 )\n\r"); */ failCnt1r1++; }
+
             if (++retries > 10)
-                break;
+                return 0;
+
             restart = 1;
+            startAddr = lastStart;
+            len = lastLen;
+            totLen = lastLeft;
+
             goto sendRead;
         }
 
@@ -239,19 +251,31 @@ sendRead:
             restart = 0;
         } else {
             // Received buffer does not point at expected address
-            if ( !dumpOk(lastStart, lastLen, tmp) ) {
-                printf("Fail 2\n\r");
+            if ( !dumpOk(lastStart, lastLen, tmp) || (rand() % 100) == 50 ) {
+
+                // printf("Fail 2\n\r");
+                failCnt2++;
+
                 if (++retries > 10)
-                    break;
+                    return 0;
+
                 restart = 1;
                 startAddr = lastStart;
                 len = lastLen;
                 totLen = lastLeft;
+
                 goto sendRead;
             }
 
-            for (uint32_t i = 0; i < lastLen; i++)
+            for (uint32_t i = 0; i < lastLen; i++) {
+                if ( ++bufCnt > bufLim ) {
+                    printf("Buffer overrun location 1!\n\r");
+                    overFlow1++;
+                    return 0;
+                }
                 *buf++ = tmp[5 + i];
+                
+            }
         }
 
         lastStart = startAddr;
@@ -264,43 +288,63 @@ sendRead:
         if ( totLen == 0 ) {
             // printf("Swooping up last bytes..\n\r");
 
-            if ( !ldrIdle( tmp ) ) {
-                printf("Fail 3\n\r");
+            if ( !ldrIdle( tmp ) || (rand() % 100) == 50 ) {
+
+                // printf("Fail 3\n\r");
+                failCnt3++;
+
                 if (++retries > 10)
-                    break;
+                    return 0;
+
                 restart = 1;
                 startAddr = lastStart;
                 len = lastLen;
                 totLen = lastLeft;
+
                 goto sendRead;
             }
 
             // Received buffer does not point at expected address
-            if ( !dumpOk(lastStart, lastLen, tmp) ) {
-                printf("Fail 4\n\r");
+            if ( !dumpOk(lastStart, lastLen, tmp) || (rand() % 100) == 50 ) {
+
+                // printf("Fail 4\n\r");
+                failCnt4++;
+
                 if (++retries > 10)
-                    break;
+                    return 0;
+
                 restart = 1;
                 startAddr = lastStart;
                 len = lastLen;
                 totLen = lastLeft;
+
                 goto sendRead;
             }
 
-            for (uint32_t i = 0; i < lastLen; i++)
+            for (uint32_t i = 0; i < lastLen; i++) {
+                if ( ++bufCnt > bufLim ) {
+                    printf("Buffer overrun location 2!\n\r");
+                    overFlow2++;
+                    return 0;
+                }
                 *buf++ = tmp[5 + i];
+            }
         }
     }
 
-    return (retries < 11) ? 1 : 0;
+    return 1;
 }
 
-void fullDump(void) {
+uint8_t tmpBuf[ 1024 ];
 
-    uint8_t tmp[512];
+uint32_t fullDump(void) {
+
+    uint16_t steps = 0;
 
     // uint32_t start = 0xbe00;
-    printf("\n\r-- fullDump --\n\r");
+    // printf("\033[XA");
+    printf("\033[H");
+    // printf("\n\r-- fullDump --\n\r");
 
     uint32_t dwtStart = DWT->CYCCNT;
 
@@ -316,128 +360,28 @@ void fullDump(void) {
         if (i + toRead > totSize)
             toRead = totSize - i;
 
-        readChunk(0xbe00 + i, toRead, tmp);
+        if ( !readChunk(0xbe00 + i, toRead, tmpBuf) ) {
+            return 0;
+            break;
+        }
+        steps++;
 
-        if ( !memCompare(&mcp_bin[i], tmp, toRead) ) {
+        if ( !memCompare(&mcp_bin[i], tmpBuf, toRead) ) {
             printf("Error: Severe error. Data missmatch\n\r");
+            return 0;
             break;
         }
 
-        i+= toRead;
+        bytesTransf += toRead;
+        i += toRead;
     }
 
     dwtStart = DWT->CYCCNT - dwtStart;
     dwtStart =  dwtStart / (48 * 1000);
 
-    printf("Took %u ms\n\r", (uint16_t)dwtStart);
-
+    printf("Took %u ms (%u steps)\n\r", (uint16_t)dwtStart, steps);
+    return 1;
 }
-
-/*
-void fullDump(void) {
-
-    // Must store the whole response
-    uint8_t tmp[16];
-
-
-    uint32_t retries = 0;
-    uint32_t restart = 1;
-
-    printf("\n\r-- fullDump --\n\r");
-
-    uint32_t bytesLeft = 16 * 1024;
-    uint32_t start = 0;
-    uint32_t len = 10;
-    uint32_t lastLeft = bytesLeft;
-    uint32_t lastStart = start;
-    uint32_t lastLen = len;
-
-    uint32_t dwtStart = DWT->CYCCNT;
-
-    while (bytesLeft > 0) {
-
-        if (bytesLeft < len)
-            len = bytesLeft;
-
-sendRead:
-        // Failed due to frame sync or no pin toggle
-        if ( !ldrReadAddr(0xbe00 + start, len, tmp, bytesLeft > 64 ? 0 : 1 ) ) {
-            printf("Fail 1\n\r");
-            if (++retries > 10)
-                break;
-            restart = 1;
-            goto sendRead;
-        }
-
-        if ( restart ) {
-            // We don't have any data to work on. Go ahead with the next read and take things from there
-            restart = 0;
-        } else {
-            // Received buffer does not point at expected address
-            if ( !dumpOk(0xbe00 + lastStart, lastLen, tmp) ) {
-                printf("Fail 2\n\r");
-                if (++retries > 10)
-                    break;
-                restart = 1;
-                start = lastStart;
-                len = lastLen;
-                bytesLeft = lastLeft;
-                goto sendRead;
-            }
-
-            if ( !memCompare(&mcp_bin[lastStart], &tmp[5], lastLen) ) {
-                printf("Error: Severe error. Data missmatch\n\r");
-                break;
-            }
-        }
-
-        lastStart = start;
-        lastLen = len;
-        lastLeft = bytesLeft;
-
-        start += len;
-        bytesLeft -= len;
-
-        if ( bytesLeft == 0 ) {
-            printf("Swooping up last bytes..\n\r");
-
-            if ( !ldrIdle( tmp ) ) {
-                printf("Fail 3\n\r");
-                if (++retries > 10)
-                    break;
-                restart = 1;
-                start = lastStart;
-                len = lastLen;
-                bytesLeft = lastLeft;
-                goto sendRead;
-            }
-
-            // Received buffer does not point at expected address
-            if ( !dumpOk(0xbe00 + lastStart, lastLen, tmp) ) {
-                printf("Fail 4\n\r");
-                if (++retries > 10)
-                    break;
-                restart = 1;
-                start = lastStart;
-                len = lastLen;
-                bytesLeft = lastLeft;
-                goto sendRead;
-            }
-
-            if ( !memCompare(&mcp_bin[lastStart], &tmp[5], lastLen) ) {
-                printf("Error: Severe error. Data missmatch\n\r");
-                break;
-            }
-
-        }
-    }
-
-    dwtStart = DWT->CYCCNT - dwtStart;
-    dwtStart =  dwtStart / (48 * 1000);
-
-    printf("Retries: %u, %u ms\n\r", (uint16_t)retries, (uint16_t)dwtStart);
-}*/
-
 
 void mcpPlay(void) {
 
@@ -470,18 +414,21 @@ void mcpPlay(void) {
 
     mcpUploadTest();
 
+    while (1) ;
 
+    printf("\033[2J");
 
+    while (1) {
+        srand( DWT->CYCCNT );
 
+        if ( fullDump() )
+            succCnt++;
+        else
+            failCnt++;
 
-
-
-    fullDump();
-
-
-
-
-
+        // printf("Succ: %u | Fail: %u\n\r", succCnt, failCnt);
+        printErrStats();
+    }
 
 
 

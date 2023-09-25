@@ -317,7 +317,13 @@ signed int vsnprintf(char *pStr, size_t length, const char *pFormat, va_list ap)
 
                 width = length - size;
             }
-        
+
+            // Catch things like "lu" etc
+            // ll_ will still fail but given that the rest of the code only supports s/u32 it's probably better to make it clearly visible from the getgo (will print an empty string)
+            if (*pFormat == 'l') {
+                pFormat++;
+            }
+
             /* Parse type */
             switch (*pFormat) {
             case 'd': 

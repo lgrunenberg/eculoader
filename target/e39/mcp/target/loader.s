@@ -43,11 +43,11 @@ LAST_STACK_ADDR  .equ    0x023f ; Last usable stack address
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; Symbols
 
-TEMP_0040        .equ    0x0040 ; Dealing with certain data in stack makes the code explode in size
+TEMP_0040        .equ    0x0040  ; Only used by memcpy
 TEMP_0041        .equ    0x0041
-M_FLAGS          .equ    0x0042
-M_RXCNT          .equ    0x0043
-M_RETS           .equ    0x0044
+M_FLAGS          .equ    0x0042  ; Only used to determine if waiting for the first byte or consecutive ones
+M_RXCNT          .equ    0x0043  ; Number of bytes left of a given SPI frame
+M_RETS           .equ    0x0044  ; Retry counter
 
 
 ; Exported symbols
@@ -60,9 +60,9 @@ M_RETS           .equ    0x0044
 _entry:
 
 ; Stack frame
-;   19: Reset countdown (How many consecutive unrecognised messages to accept before going into reset mode)
-;   18: rx flags        (Unused atm)
-;   17: rx count        (Number of bytes left to read before a complete frame has been assembled)
+;   19: Reset countdown (Unused) How many consecutive unrecognised messages to accept before going into reset mode
+;   18: rx flags        (Unused)
+;   17: rx count        (Unused) (Number of bytes left to read before a complete frame has been assembled)
 ; 1-16: spi data        (SPI frame. tsx has a nifty trick up its sleeve so it'll automagically point here when using said instruction)
 ;    0: * do not use *  (Data is stored BEFORE the stack pointer is decremented. Thus, this is used when calling functions or pushing data)
 
@@ -122,21 +122,21 @@ cpyLoop:
 
 
 ; Response handlers - We need these below 0x0100...
-csumError:
+errChecksum:       ; Received checksum wrong
+errUnkStep:        ; Received step wrong
     lda     #0x04
     bra     stErrResp
 
-addrError:
-; Received length out of bounds
-lenError:
+errAddress:        ; (Unused) Address out of range
+errLength:         ; Received length out of range
     lda     #0x20
 
-stErrResp:
+stErrResp: ; Store response
     sta     2, s
 
 ; Command error one way or another
-rxErrorSPI:
-rxError:
+errSPI:            ; SPI bit faults
+errUnkCmd:         ; Unknown command
 ; Use internal delay function and wait for 2.2 ms
 ; 8 + (3 * 8 * 183 + 8) = 4408 bus cycles
 ; (8 MHz cpu == 2 MHz bus)
@@ -162,10 +162,6 @@ commandOk:
     ora     #0x80
     sta     , x
 
-commandOk_manual:
-
-spiTimeoutErr:
-
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; Start of a new frame
 loopEntry_ResetErrCnt:
@@ -178,6 +174,11 @@ loopEntry_KeepErrCnt:
     tsx                    ; Point H:X at spi buffer start
     mov     #16, *M_RXCNT  ; Reset count
     clr     *M_FLAGS       ; Clear rx flags
+
+    bsr     getChecksum
+    sta     ,x   ; Store checksum
+    tsx
+
 
 ; Have to disable and enable the controller to enable a nifty coding hack
     bclr    #1, *SPCR ; Disable SPI
@@ -213,7 +214,7 @@ inRxLoop:
 
     lda     *SPSCR    ; Load SPI flags register
     bit     #0x30     ; Check for error conditions; Overflow or mode fault
-    bne     rxErrorSPI
+    bne     errSPI
     tsta
     bpl     rxLoop    ; Check reception flag
 
@@ -233,9 +234,7 @@ inRxLoop:
     tsx
     bsr     getChecksum
     cmp     ,x
-    beq     msgSumOk
-    jmp     *csumError
-msgSumOk:
+    bne     errChecksum
 
 ; ; ; ; ; Data done
 ; RX:
@@ -246,10 +245,18 @@ msgSumOk:
     ; sp 0 1 2 3 4 5 6 7 8 9 a b c d e f 10
     ; rx   0 1 2 3 4 5 6 7 8 9 a b c d e f
 
-    pula    ; 0, Step
-    pula    ; 1, Command
-    pulh    ; 2, Hi address
-    pulx    ; 3, Lo address
+    pula           ; 0, Step
+; Check step.
+    cmp     #0x06
+    beq     stpOk
+    cmp     #0x19
+    beq     stpOk
+    psha           ; Return stack ptr
+    bra     errUnkStep
+stpOk:
+    pula           ; 1, Command
+    pulh           ; 2, Hi address
+    pulx           ; 3, Lo address
     ais     #-4
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
@@ -270,7 +277,7 @@ msgSumOk:
 ; yy 06 - <LOADER> Shutdown                           - implemented -
 ; yy 07 - <LOADER> Set flash protection mask          - implemented -
 ; yy 08 - <LOADER> Erase flash                        - implemented -
-; YY 09 - <LOADER> Write data in buffer               - missing -
+; YY 09 - <LOADER> Write data in buffer               - implemented -
 
 ; SAUCE  = Commands that are present in the loader and boot sauce mode
 ; LOADER = Commands that are only available in the loader
@@ -299,9 +306,12 @@ checkRamRead:
 ; DD   : Data
 ; CC   : Checkum-8 of the whole response, byte [0] to [14]
     lda     5, s     ; Read len
-    beq     lenError ; 0-len
+    beq     rdLenErr ; 0-len
     cmp     #11
-    bcc     lenError ; 11 or more bytes (error)
+    bcs     rdLenOk ; 11 or more bytes (error)
+rdLenErr:
+    jmp     *errLength
+rdLenOk:
 ; Copy data
     pshx         ; Push source address
     pshh
@@ -309,16 +319,23 @@ checkRamRead:
     aix     #7   ; Increment past pushed address, stepper, command, address and length
     jsr     *memcpy
     ais     #2
-; Flag OK and store checksum
-    tsx
-    lda     #0x82
-    sta     1, x
+    jmp     *commandOk
 
-    bsr     getChecksum
-    sta     ,x   ; Store checksum
-
-; Must complete response before checksumming...
-    jmp     *commandOk_manual
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
+; Checksum
+; h:x source  (h:x will point at the next byte after the last checksummed one)
+; Ret: a = checksum
+getChecksum:
+    lda     #15  ; Number of bytes (Always 15)
+    psha
+    clra
+moreCsum:
+    add     ,x
+    aix     #1
+    dbnz    1, s, moreCsum
+    ais     #1
+    rts
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
@@ -331,10 +348,10 @@ checkRamWrite:
 ; NN   : Count 1 to 10
 ; DD   : Data
 ; CC   : Checkum-8 of the whole request, byte [0] to [14]
-    lda     5, s     ; Read len
-    beq     lenErrorOOR ; 0-len
+    lda     5, s         ; Read len
+    beq     errLengthOOR ; 0-len
     cmp     #11
-    bcc     lenErrorOOR ; 11 or more bytes (error)
+    bcc     errLengthOOR ; 11 or more bytes (error)
 
     tsx
     aix     #5
@@ -354,26 +371,8 @@ checkRamWrite:
 
     jmp     *commandOk
 
-lenErrorOOR:
-    jmp     *lenError
-
-
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-; Checksum
-; h:x source  (h:x will point at the next byte after the last checksummed one)
-; a: n Bytes
-; Ret: a = checksum
-getChecksum:
-    lda     #15  ; Number of bytes (Always 15)
-    psha
-    clra
-moreCsum:
-    add     ,x
-    aix     #1
-    dbnz    1, s, moreCsum
-    ais     #1
-    rts
+errLengthOOR:
+    jmp     *errLength
 
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
@@ -394,7 +393,7 @@ checkIdentity:
 
     bsr     idStr_e     ; Ugly trick to get absolute address of string
 idStr:
-.ascii "TXSUITE_E39MCP" ; <- Return address points at this string
+.ascii "TXS_E39_MCP" ; <- Return address points at this string
 idStr_e:
 
     tsx
@@ -447,7 +446,7 @@ checkErase:
 ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
 ; 9 - Write flash
 checkWrite:
-    dbnza   jumprxError
+    dbnza   jmpErrUnkCmd
 
 ; Reminder of index in stack:
 ; 01 02 03 04 05
@@ -457,10 +456,10 @@ checkWrite:
 
     ; Not fully checked! What you want to prevent is row overlap
 
-    lda     5, s        ; Read len
-    beq     lenErrorOOR ; 0-len
+    lda     5, s         ; Read len
+    beq     errLengthOOR ; 0-len
     cmp     #32
-    bcc     lenErrorOOR ; 32 or more bytes (error)
+    bcc     errLengthOOR ; 32 or more bytes (error)
 
     sthx    *LADDR  ; Store initial last address
     deca            ; From length to last index / address
@@ -474,5 +473,5 @@ doWr:
     jsr     PRGRNGE
     jmp     *commandOk
 
-jumprxError:
-    jmp     *rxError
+jmpErrUnkCmd:
+    jmp     *errUnkCmd

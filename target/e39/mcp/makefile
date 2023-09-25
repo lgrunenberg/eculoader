@@ -70,6 +70,7 @@ ALLOBJS=\
 	obj/miscfunc.o \
 	obj/mcp.o \
 	obj/mcp_commands.o \
+	obj/mcp_tests.o \
 	obj/mcp_loader.o \
 	obj/crc.o \
 	obj/syscalls.o \
@@ -88,6 +89,8 @@ obj/mcp_trgbin.o : mcp_trgbin.s
 obj/mcp.o : mcp.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 obj/mcp_commands.o : mcp_commands.c
+	@$(CC) $(CFLAGS) -c $< -o $@
+obj/mcp_tests.o : mcp_tests.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 obj/mcp_loader.o : mcp_loader.c
 	@$(CC) $(CFLAGS) -c $< -o $@

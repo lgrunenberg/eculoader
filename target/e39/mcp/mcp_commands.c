@@ -12,6 +12,10 @@
 #include "stm32f10x_tim.h"
 #include "stm32f10x_spi.h"
 
+
+
+
+
 extern uint32_t get_Timeout();
 extern void set_Timeout(const uint16_t ms);
 
@@ -29,7 +33,7 @@ uint16_t txRamProg = 0;
 uint16_t rxRamAddr = 0;
 uint16_t txRamAddr = 0;
 
-uint8_t flashBuf[16 * 1024];
+// uint8_t flashBuf[16 * 1024];
 
 uint8_t lastCommSts = 0;
 
@@ -55,7 +59,7 @@ void printFrame(const uint8_t *snd, const uint8_t *rec) {
     printf(" )\n\r");*/
 }
 
-void csumFrame(uint8_t *snd) {
+void mcp_ChecksumFrame(uint8_t *snd) {
     uint8_t checksum = 0;
     for (uint32_t i = 0; i < 15; i++)
         checksum += snd[ i ];
@@ -96,6 +100,9 @@ void sendSPIFrame_noWait(const uint8_t *snd, uint8_t *rec, const int nBytes) {
     printFrame( m_snd, m_rec );
 }
 
+
+
+
 uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes, const uint8_t pFrame) {
     const uint8_t *m_snd = snd;
     const uint8_t *m_rec = rec;
@@ -103,6 +110,8 @@ uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes, const 
 
     static int firstTransm = 1;
     static uint32_t oldPin = 0;
+
+    // static uint32_t randCnt = 5000;
 
     uint32_t retVal = 1;
 
@@ -146,10 +155,21 @@ uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes, const 
         *rec++ = (uint8_t)SPI2->DR;
 
         // Wait 100 micro between each transmission
-        // dwtWait( 48 * 100 );
+        dwtWait( 48 * 100 );
 
         // 25 bare minimum
-        dwtWait( 48 * 50 );
+        // dwtWait( 48 * 50 );
+
+
+
+/*
+        if ( (rand() % 100) == 50 ) {
+            if ( --randCnt == 0 ) {
+                printf("<< Injecting SPI transaction error >>\n\r");
+                sleep( 20 );
+                randCnt = 2000;
+            }
+        }*/
 
 /*
         if (waitExtra != 0) {
@@ -192,12 +212,13 @@ int readFrame(const uint8_t *buf) {
     case 0: // Do nothing
         break;
     case 1: // Second return, store data
+        /*
         if (rxRamAddr < (sizeof(flashBuf) - 1)) {
             flashBuf[ rxRamAddr + 0 ] = buf[ 14 ];
             flashBuf[ rxRamAddr + 1 ] = buf[ 15 ];
         } else {
             printf("Ram Addr out of bounds!!!\n\r");
-        }
+        }*/
         txRamDone = 1;
         // 1 -> 0, 2 -> 1
     default:
@@ -301,7 +322,9 @@ void testErase(void) {
 }
 
 
-// Alternate between 06/19 when
+
+
+// Alternate between 06/19
 void bootSecretStep(uint8_t *snd) {
     static uint32_t step = 0;
     static const uint8_t altByt[] = { 0x06, 0x19 };
@@ -319,7 +342,7 @@ void enterSecretBoot(void) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        csumFrame( snd );
+        mcp_ChecksumFrame( snd );
         sendSPIFrame( snd, rec, 16, 1 );
         // sleep ( 5 );
     }
@@ -328,7 +351,7 @@ void enterSecretBoot(void) {
 void sendSecretPing(void) {
     uint8_t rec[16], snd[16] = { 0x00, 0x01 };
     bootSecretStep( snd );
-    csumFrame( snd );
+    mcp_ChecksumFrame( snd );
     sendSPIFrame( snd, rec, 16, 1 );
 }
 
@@ -349,7 +372,7 @@ void sauceReadAddress(const uint32_t address, const uint8_t count) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        csumFrame( snd );
+        mcp_ChecksumFrame( snd );
         sendSPIFrame( snd, rec, 16, 1 );
     }
 }
@@ -363,7 +386,7 @@ void jumpRam(const uint32_t address) {
     snd[3] = (uint8_t)address;
 
     bootSecretStep( snd );
-    csumFrame( snd );
+    mcp_ChecksumFrame( snd );
     sendSPIFrame( snd, rec, 16, 1 );
 }
 
@@ -376,7 +399,7 @@ void readGMString(void) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        csumFrame( snd );
+        mcp_ChecksumFrame( snd );
         sendSPIFrame( snd, rec, 16, 1 );
     }
 }
@@ -389,7 +412,7 @@ void exitLoader(void) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        csumFrame( snd );
+        mcp_ChecksumFrame( snd );
         sendSPIFrame( snd, rec, 16, 1 );
     }
 }
@@ -405,7 +428,7 @@ void setFlashProt(const uint8_t msk) {
 
     while (cnt--) {
         bootSecretStep( snd );
-        csumFrame( snd );
+        mcp_ChecksumFrame( snd );
         sendSPIFrame( snd, rec, 16, 1 );
     }
 }

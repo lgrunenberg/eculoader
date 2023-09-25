@@ -41,19 +41,20 @@ BE00 - BFFF is always protected unless FLBPR is 0xff
 extern uint8_t mcp_loader[];
 extern const uint32_t mcp_loaderSize;
 
-extern uint8_t mcp_bin[];
-extern const uint32_t mcp_binSize;
 
+#define MAX_BYTES    (     10 )
+#define LDR_ADDRESS  ( 0x00b0 )
 
 
 
 
 
 // mcp.c
+void uploadData(const uint32_t addr, const uint8_t *data, const uint32_t len);
 
 
 // mcp_commands.c
-void csumFrame(uint8_t *snd);
+void mcp_ChecksumFrame(uint8_t *snd);
 
 
 uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes, const uint8_t pFrame);
@@ -71,7 +72,7 @@ void setFlashProt(const uint8_t msk); // 7
 uint8_t waitExtra;
 
 // mcp_loader.c
-
+void mcpUploadTest(void);
 
 
 
