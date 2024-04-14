@@ -71,10 +71,20 @@ _entry:
     ldhx    #(LAST_STACK_ADDR - 21)
     txs
 
-; Preconfigure cpu speed
+
+
+; Some paranoia just to make sure the environment is known
+; - Investigate. Baaaaad things happens if not commented out -
+    ; sta     COPCTL         ; Feed doggo 
+    ; sei                    ; Nuke all interrupts
+    ; mov     #0x10, *OSCSC  ; 8 MHz internal osc ( 2 MHz bus )
+    ; lda     OSC_TRIM       ; Load stored trim
+    ; sta     *OSCTRIM       ; Store it
+
+; Preconfigure cpu speed for erase and write routines
 ; Not entirely sure what to do here...
 ; Recovery will set this value at boot up if the main firmware is missing but it's seemingly left alone if you directly enter the sauce mode from main
-    mov     #0x08, *CPUSPD
+    mov     #8, *CPUSPD
 
 ; Prep tim1 for our use
 ; Freq == 2 Mhz / div 2 (1 MHz)

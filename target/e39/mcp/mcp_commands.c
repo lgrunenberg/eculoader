@@ -155,12 +155,10 @@ uint32_t sendSPIFrame(const uint8_t *snd, uint8_t *rec, const int nBytes, const 
         *rec++ = (uint8_t)SPI2->DR;
 
         // Wait 100 micro between each transmission
-        dwtWait( 48 * 100 );
+        // dwtWait( 48 * 100 );
 
         // 25 bare minimum
-        // dwtWait( 48 * 50 );
-
-
+        dwtWait( 48 * 50 );
 
 /*
         if ( (rand() % 100) == 50 ) {
@@ -404,31 +402,3 @@ void readGMString(void) {
     }
 }
 
-// < XX 06 > Exit loader
-void exitLoader(void) {
-    uint8_t rec[16], snd[16] = { 0x19, 0x06 };
-    int cnt = 10;
-    printf("\n\r-- Exit loader --\n\r");
-
-    while (cnt--) {
-        bootSecretStep( snd );
-        mcp_ChecksumFrame( snd );
-        sendSPIFrame( snd, rec, 16, 1 );
-    }
-}
-
-// < XX 07 > Set flash protection
-void setFlashProt(const uint8_t msk) {
-    uint8_t rec[16], snd[16] = { 0x19, 0x07 };
-    int cnt = 10;
-
-    snd[2] = msk;
-
-    printf("\n\r-- Set protection --\n\r");
-
-    while (cnt--) {
-        bootSecretStep( snd );
-        mcp_ChecksumFrame( snd );
-        sendSPIFrame( snd, rec, 16, 1 );
-    }
-}

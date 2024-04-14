@@ -26,6 +26,31 @@ extern const uint32_t mcp_loaderSize;
 */
 
 
+uint32_t ldrCompare(void) {
+    uint8_t tmp[128];
+    uint32_t i = 0;
+    printf("\n\r-- Test verification of loader --\n\r");
+    while (i < mcp_loaderSize) {
+        uint32_t toRead = 128;
+        if (i + toRead > mcp_loaderSize)
+            toRead = mcp_loaderSize - i;
+
+        if ( !readChunk( 0x00b0 + i, toRead, tmp ) ) {
+            printf("Error: Severe error. Data missmatch\n\r");
+            return 0;
+        }
+
+        if ( !memCompare( &mcp_loader[i], tmp, toRead ) ) {
+            printf("Error: Severe error. Data missmatch\n\r");
+            return 0;
+        }
+        i += toRead;
+    }
+
+    printf("-- done --\n\r");
+
+    return 1;
+}
 
 void mcpUploadTest(void) {
     uint32_t address = LDR_ADDRESS;
@@ -61,10 +86,26 @@ void mcpUploadTest(void) {
         sendSPIFrame( snd, rec, 16 , 1 );
     }
 
+
+
+
+    if ( !ldrCompare() ) {
+        printf("Upload does not match\n\r");
+        while( 1 );
+    }
+
     jumpRam( LDR_ADDRESS );
 
-
     sleep( 100 ) ;
+
+    if ( !ldrCompare() ) {
+        printf("Upload does not match\n\r");
+        while( 1 );
+    }
+
+    return;
+/*
+
     sauceReadAddress( 0xec00, 9 );
 
     readGMString();
@@ -78,6 +119,9 @@ void mcpUploadTest(void) {
     sleep( 500 );
 
     sauceReadAddress( 0x60, 10 );
+*/
+
+
 
     // sauceReadAddress( 0x60, 0 );
     // sauceReadAddress( 0x60, 11 );
@@ -89,10 +133,46 @@ void mcpUploadTest(void) {
 
     // waitExtra = 1;
 
-    setFlashProt( 0xff );
+    // setFlashProt( 0xff );
 
     // readGMString();
 
     // readFlashBoot();
     // readFlashBoot();
 }
+
+
+
+
+
+
+// < XX 06 > Exit loader
+void exitLoader(void) {
+    uint8_t rec[16], snd[16] = { 0x19, 0x06 };
+    int cnt = 10;
+    printf("\n\r-- Exit loader --\n\r");
+
+    while (cnt--) {
+        bootSecretStep( snd );
+        mcp_ChecksumFrame( snd );
+        sendSPIFrame( snd, rec, 16, 1 );
+    }
+}
+
+// < XX 07 > Set flash protection
+void setFlashProt(const uint8_t msk) {
+    uint8_t rec[16], snd[16] = { 0x19, 0x07 };
+    int cnt = 10;
+
+    snd[2] = msk;
+
+    printf("\n\r-- Set protection --\n\r");
+
+    while (cnt--) {
+        bootSecretStep( snd );
+        mcp_ChecksumFrame( snd );
+        sendSPIFrame( snd, rec, 16, 1 );
+    }
+}
+
+

@@ -17,6 +17,10 @@ T1SC      .equ    0x0020    ; TIM1 Status and Control register
 T1MOD     .equ    0x0023    ; TIM1 Modulo register
 T1SC2     .equ    0x0030    ; TIM1 Channel 2 Status and Control register
 
+OSCSC     .equ    0x0036    ; Oscillator Status and Control Register
+OSCTRIM   .equ    0x0038    ; Oscillator Trim Register
+OSC_TRIM  .equ    0xffc0    ; Internal Oscillator Trim Value
+
 ; TIM2 registers
 T2SC      .equ    0x0240    ; TIM2 Status and Control register
 

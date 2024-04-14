@@ -198,7 +198,7 @@ uint32_t failCnt = 0;
 uint32_t succCnt = 0;
 uint32_t bytesTransf = 0;
 
-static void printErrStats(void) {
+void printErrStats(void) {
     printf("f0r0 %9lu, f0r1 %9lu\n\r", failCnt1r0, failCnt1r1);
     printf("f2   %9lu, f3   %9lu, f4 %9lu\n\r", failCnt2, failCnt3, failCnt4);
     printf("ovf1 %9lu, ovf2 %9lu\n\r", overFlow1, overFlow2);
@@ -383,6 +383,133 @@ uint32_t fullDump(void) {
     return 1;
 }
 
+
+/*
+// < XX 02 > Read anything in addressable memory space
+uint32_t ldrReadAddr(const uint32_t address, const uint8_t count, uint8_t *dat, const uint8_t pFrame) {
+    uint8_t rec[16], snd[16] = {
+        0x19,       // Step
+        0x02,       // Command
+        (uint8_t)(address>>8), (uint8_t)address, // Address
+        count       // Count
+    };
+
+    if ( count < 1 || count > 10 ) {
+        printf("ldrReadAddr: Count err\n\r");
+        return 0;
+    }
+
+    bootSecretStep( snd );
+    mcp_ChecksumFrame( snd );
+
+    if ( !sendSPIFrame( snd, rec, 16, pFrame ) ) {
+        printf("ldrReadAddr: sendSPIFrame err\n\r");
+        return 0;
+    }
+
+    for (uint32_t i = 0; i < 16; i++)
+        *dat++ = rec[ i ];
+
+    return 1;
+}
+*/
+
+uint32_t isFF(const uint8_t *buf, uint32_t len) {
+    for (uint32_t i = 0; i < len; i++)
+        if (*buf++ != 0xff)
+            return 0;
+    return 1;
+}
+
+
+
+// < XX 08 HH LL > Erase from up to the nearest 64-byte boundary
+// HH LL: Start Address
+uint32_t ldrEraseAddr(const uint32_t address) {
+    uint8_t rec[16], snd[16] = {
+        0x00,       // Step
+        0x08,       // Command
+        (uint8_t)(address>>8), (uint8_t)address, // Address
+    };
+
+    bootSecretStep( snd );
+    mcp_ChecksumFrame( snd );
+
+    if ( !sendSPIFrame( snd, rec, 16, 0 ) ) {
+        printf("ldrEraseAddr: sendSPIFrame err\n\r");
+        return 0;
+    }
+
+    return 1;
+}
+
+
+
+uint32_t mcpErase(uint32_t start, uint32_t end) {
+
+    uint8_t  buf[64];
+    uint32_t tries;
+
+    // Round down to start of page
+    start &= ~63;
+    // Round up to end of page + 1
+    end = (end + 63) & ~63;
+
+    if ( start < 0xBE00 ||
+         start >= end   ||
+         end   > 0x10000 ) {
+        return 0;
+    }
+
+    while ( start < end ) {
+
+        tries = 50;
+
+        printf("Erase %04lx-%04lx: ", start, start + 63);
+
+checkErased:
+        if ( !readChunk( start, 64, buf ) ) {
+            printf("Read eror\n\r");
+            return 0;
+        }
+
+        if ( !isFF( buf, 64 ) ) {
+            if ( --tries == 0 ) {
+                printf("Gave up on erasing block\n\r");
+                return 0;
+            }
+            ldrEraseAddr( start );
+            printf(". ");
+            goto checkErased;
+        } else if ( tries == 50 )
+            printf("[ was ff ]\n\r");
+        else
+            printf("\n\r");
+        start += 64;
+    }
+
+    return 1;
+}
+
+
+uint32_t mcpWrite(void) {
+
+
+
+
+
+
+
+
+
+
+    return 0;
+}
+
+
+
+
+
 void mcpPlay(void) {
 
     uint8_t snd[16] = { 0x4f, 0x00 , 0x00 };
@@ -414,8 +541,23 @@ void mcpPlay(void) {
 
     mcpUploadTest();
 
-    while (1) ;
+    // while (1) ;
 
+
+
+    setFlashProt( 0xff );
+
+    if (mcpErase( 0xBE00, 0xEBFF ) ) {
+
+    }
+
+
+    while ( 1 ) ;
+
+
+
+
+/*
     printf("\033[2J");
 
     while (1) {
@@ -429,7 +571,7 @@ void mcpPlay(void) {
         // printf("Succ: %u | Fail: %u\n\r", succCnt, failCnt);
         printErrStats();
     }
-
+*/
 
 
 
