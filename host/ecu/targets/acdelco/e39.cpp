@@ -334,7 +334,10 @@ bool e39::dump()
 */
 
         fileManager fm;
-        fileHandle *file = fm.open("./loaderblobs/mainloader.bin");
+        fileHandle *file = fm.open("../mpc5566/out/loader.bin");
+
+        // 
+
 
         if (!file || file->size < (6 * 1024))
         {
@@ -430,6 +433,7 @@ bool e39::dump()
         */
         delete[] dat;
     };
+
     uint64_t msTaken = duration_cast<milliseconds>(system_clock::now() - timeStart).count();
     uint32_t secTaken = msTaken / 1000;
     uint32_t minTaken = msTaken / 60000;
