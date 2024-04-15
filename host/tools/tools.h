@@ -6,6 +6,7 @@
 #include <iostream>
 #include <iomanip>
 
+#include "file/file.h"
 #include "logger/logger.h"
 #include "timer/timer.h"
 #include "checksum/checksum.h"

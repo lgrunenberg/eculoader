@@ -12,6 +12,9 @@ public:
     explicit e39();
     ~e39();
 
+
+    bool bamFlash(uint32_t address);
+
     bool dump();
 };
 

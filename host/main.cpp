@@ -85,7 +85,7 @@ int main()
     channelData chDat;
     chDat.name = adapters.front();
     chDat.bitrate = btr500k;
-    chDat.canIDs = { 0x7e0, 0x7e8, 0x101 };
+    chDat.canIDs = { 0x7e0, 0x7e8, 0x101, 0x011 };
 
     if(! ecu.open( chDat ) )
     {

@@ -516,8 +516,9 @@ bool canusb::CalcAcceptanceFilters(FT_HANDLE ftHandle, list<uint32_t> idList)
 
 bool canusb::openChannel(FT_HANDLE ftHandle, int nSpeed)
 {
-    char buf[4] = {0x0d, 0x0d, 0x0d, 0};
+    char buf[16] = {0x0d, 0x0d, 0x0d, 0};
     DWORD retLen;
+
     // FT_STATUS stat = FT_OK;
     // list <uint32_t> canIDs = { 0x220, 0x238, 0x240, 0x258, 0x266 };
     // list<uint32_t> canIDs = { 0x220, 0x238, 0x23c, 0x240, 0x258, 0x25c, 0x266 };
@@ -541,13 +542,15 @@ bool canusb::openChannel(FT_HANDLE ftHandle, int nSpeed)
 
 /*
     // Set CAN baudrate
-    sprintf(buf, "s%04Xd\r", 0x002f);
+    sprintf(buf, "s%04X\r", 0x002f);
     m_pFtPurge((FT_HANDLE)ftHandle, FT_PURGE_RX);
-    if (m_pFtWrite((FT_HANDLE)ftHandle, buf, 3, &retLen) != FT_OK)
+    if (m_pFtWrite((FT_HANDLE)ftHandle, buf, 6, &retLen) != FT_OK)
     {
         log("Write failed");
         return false;
-    }*/
+    }
+*/
+
 
     // Set CAN baudrate
     sprintf(buf, "S%d\r", nSpeed);
@@ -557,6 +560,8 @@ bool canusb::openChannel(FT_HANDLE ftHandle, int nSpeed)
         log("Write failed");
         return false;
     }
+
+
 
     sprintf(buf, "Z0\r"); // Fuck off, timestamps
     m_pFtPurge((FT_HANDLE)ftHandle, FT_PURGE_RX);
@@ -626,15 +631,15 @@ bool canusb::close()
 
 bool canusb::open(channelData device)
 {
-    // char dname[32] = {0};
-    string identifier;
-    identifier = device.name;
+    string identifier = device.name;
 
     this->close();
     DWORD retLen;
 
     log("OpenEx");
+
     canusbContext = 0;
+
     if (m_pFtOpenEx((PVOID)identifier.c_str(), FT_OPEN_BY_SERIAL_NUMBER, &canusbContext) == FT_OK)
     {
         if (canusbContext == nullptr)

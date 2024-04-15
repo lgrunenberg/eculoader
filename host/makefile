@@ -79,8 +79,12 @@ out/acdelco_e39.o: ecu/targets/acdelco/e39.cpp
 TOOLOBJS=\
 	out/checksum.o \
 	out/tools.o \
+	out/file.o \
 	out/logger.o \
 	out/timer.o
+
+out/file.o: tools/file/file.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 out/tools.o: tools/tools.cpp
 	@$(CXX) $(CXXFLAGS) -c $< -o $@

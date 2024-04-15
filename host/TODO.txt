@@ -1,0 +1,8 @@
+
+
+Make sure adapters can switch speed and take filter settings. lawicel canusb / win is very much hardcoded atm
+
+
+
+
+
