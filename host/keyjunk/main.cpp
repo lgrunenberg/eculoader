@@ -109,55 +109,8 @@ static const void *matchedpairs[] = {
     trionic8_CIM,
 };
 
-/*
-// t8
-u32 convertSeed(u32 seed)
-{
-    u32 key = (seed >> 5) | (seed << 11);
-    key += 0xB988;
-    key &= 0xFFFF;
-
-    // 0xfd
-    // key /= 3;
-    // key ^= 0x8749;
-    // key += 0x0ACF;
-    // key ^= 0x81BF;
-
-    key ^= 0x8749;
-    key += 0x06D3;
-    key ^= 0xCFDF;
-
-    return key & 0xFFFF;
-}
-*/
 int main()
 {
-
-
-
-
-/*
-    for (u32 i = 0x1333; i < (0x1333 + 16); i++)
-    {
-        printf("    {0x%04x, 0x%04x},\n", i, convertSeed(i));
-    }
-
-    return 0;*/
-/*
-    #define ARRNAME newArray_3
-    printf("const u8 ARRNAME[][13] = {\n");
-    for (u32 i = 0; i < sizeof(ARRNAME) / 13; i++)
-    {
-        printf("{");
-        for (u32 e = 0; e < 12; e++)
-        {
-            printf("0x%02x, ", ARRNAME[(i*13)+e]);
-        }
-        printf("0x%02x}, // %u\n", ARRNAME[(i*13)+12], i);
-    }
-    printf("};");
-    return 0;*/
-
     for (u32 list = 0; list < ((sizeof(matchedpairs) / sizeof(matchedpairs[0]))/2); list++)
     {
         u8  *name  =  (u8 *) matchedpairs[list*2];
