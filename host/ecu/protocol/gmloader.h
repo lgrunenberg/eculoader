@@ -1,0 +1,15 @@
+#ifndef __GMLOADER_H__
+#define __GMLOADER_H__
+
+#include "gmlan.h"
+
+class gmloader : public gmlan
+{
+
+public:
+    uint8_t *loader_readMemoryByAddress(uint32_t address, uint32_t len, uint32_t blockSize);
+    bool loader_StartRoutineById(uint8_t service, uint32_t param1, uint32_t param2);
+    uint8_t *loader_requestRoutineResult(uint8_t service);
+};
+
+#endif

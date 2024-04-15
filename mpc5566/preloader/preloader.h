@@ -15,6 +15,8 @@ enum e_mode {
     MODE_BAM   = 0, // Defunct
     MODE_E39   = 1,
     MODE_E78   = 2,
+    // Note - shuffle this?
+    MODE_E39A  = 3,
 };
 
 // Used by the main loader (specifically gmlan) if the broadcast feature is turned on

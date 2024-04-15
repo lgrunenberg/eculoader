@@ -22,6 +22,11 @@ hostutils/bin2csfile
 hostutils/maintolz77
 target/.private
 
+host/testapp
+host/libs/*
+host/*.dll
+host/*.exe
+
 # Exclusions from above
 !mpc5566/out/loader.bin
 !target/e39/mcp/bin/firmware.bin
