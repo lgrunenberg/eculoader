@@ -3,7 +3,7 @@
 Compiler situation on Ubuntu is "I give up" so here's a workaround with chroot.
 ( You can use this on Debian too if you don't want to install old crusty compilers )
 
-> Problem with mpc5566 is that it's ***SPE*** and not regular powerpc so you can NOT use the vanilla powerpc compiler.
+> Problem with mpc5566 is that it's ***SPE*** and not regular powerpc so you can ***NOT*** use the vanilla compiler.
 
 Install debootstrap
 ```
