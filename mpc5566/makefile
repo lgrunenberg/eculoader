@@ -131,7 +131,7 @@ out/loader.bin : out/loader.elf
 	@$(OBJCOPY) -O binary  $< $@
 	@rm -f Bootloader_mpc5566.cs
 	@$(CSTOOL) out/loader.bin Bootloader_mpc5566
-#	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/Bootloader_mpc5566.cs
+#	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/bootloaders/Bootloader_mpc5566.cs
 	@echo " "
 	@echo " "
 	@echo ___Main loader_________________
