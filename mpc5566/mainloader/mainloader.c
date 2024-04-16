@@ -43,15 +43,26 @@ void broadcastMessage()
     uint32_t *box = (uint32_t*)(0xFFFC0080 + 0x20);
 #endif
 
-    uint8_t  *boxData = (uint8_t *)&box[2];
-    uint8_t locData[] = { 0x01, 0x3e };
-
-    for (uint32_t i = 0; i < 2; i++)
-        *boxData++ = locData[i];
-
     *box  |= 0x0C000000;
 }
 
+static void preloadBroadcast()
+{
+#ifdef enableDebugBOX
+    uint32_t *box = (uint32_t*)(0xFFFC0080 + 0x30);
+#else
+    uint32_t *box = (uint32_t*)(0xFFFC0080 + 0x20);
+#endif
+
+    uint8_t  *boxData = (uint8_t *)&box[2];
+
+    boxData[0] = 0xFE;
+    boxData[1] = 0x01;
+    boxData[2] = 0x3E;
+
+    for (int i = 3; i < 8; i++)
+        boxData[ i ] = 0;
+}
 #endif
 
 /////////////////////////////////////////////////////////////////
@@ -272,8 +283,9 @@ static uint32_t configureFlexCAN()
     CANa_MB0[8] |= 0x08080000;  // (2) Send
     CANa_MB0[9]  = debugID << 18;
 #elif defined(enableBroadcast)
-    CANa_MB0[8] |= 0x08020000; // (2) Send
+    CANa_MB0[8] |= 0x08080000; // (2) Send
     CANa_MB0[9]  = broadcastID << 18;
+    preloadBroadcast();
 #endif
 
     // Set mask to exact match

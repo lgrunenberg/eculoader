@@ -40,8 +40,11 @@ MODFLAG += -DenableBroadcast
 
 # Not really the correct model but we get the right instruction set.
 # (Avoid float just to stay safe. Don't know how it'll behave)
-# -mcpu=ec603e
+ifdef OS
+TARGPROC = -mcpu=ec603e -mspe -mno-toc -mbig-endian
+else
 TARGPROC = -mspe -mno-toc -mbig-endian
+endif
 GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC
 ASFLAGS  = $(TARGPROC) $(GLOBFLAGS) -c 
 CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -Werror -Wpedantic -std=gnu99 -c
