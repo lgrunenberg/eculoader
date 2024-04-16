@@ -7,7 +7,7 @@
 
 extern "C"
 {
-#if defined (WIN32)
+#if defined (_WIN32)
 #include "../../libs/kvaser/inc/canlib.h"
 #else
 #include "../../libs/kvaser/linux/include/canlib.h"

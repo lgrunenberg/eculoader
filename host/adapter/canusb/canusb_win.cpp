@@ -12,12 +12,11 @@
 using namespace std;
 using namespace msgsys;
 using namespace logger;
+
 extern "C"
 {
 
     static HMODULE                    m_hmodule        = nullptr; // dll library pointer
-
-	static FT_HANDLE                canusbContext    = nullptr; // "fthandle"
 
     // Generate and fetch list of adapters connected to the system
 	typedef FT_STATUS (*PtrToCreateDeviceList)(LPDWORD);
@@ -358,16 +357,16 @@ void canusb::messageThread(canusb *thisInstance)
 
     HANDLE hEvent = CreateEvent(NULL,false,false,"");
 
-    m_pFtSetEventNotif(canusbContext, FT_EVENT_RXCHAR, hEvent);
+    m_pFtSetEventNotif(thisInstance->canusbContext, FT_EVENT_RXCHAR, hEvent);
 
     // Start fresh
-    m_pFtPurge((FT_HANDLE)canusbContext, FT_PURGE_RX);
+    m_pFtPurge((FT_HANDLE)thisInstance->canusbContext, FT_PURGE_RX);
 
     while (thisInstance->runThread)
     {
         WaitForSingleObject(hEvent, 500);
 
-        uint32_t getstat = m_pFtGetStatus((FT_HANDLE)canusbContext, &nRxCnt, &nTxCnt, &eventStatus);
+        uint32_t getstat = m_pFtGetStatus((FT_HANDLE)thisInstance->canusbContext, &nRxCnt, &nTxCnt, &eventStatus);
         if (getstat != FT_OK && thisInstance->runThread)
         {
             log("ft_status: " + to_hex(getstat));
@@ -381,7 +380,7 @@ void canusb::messageThread(canusb *thisInstance)
                 nRxCnt = sizeof(gbufferRx);
             }
 
-            if (m_pFtRead((FT_HANDLE)canusbContext, gbufferRx, nRxCnt, &nRcvCnt) == FT_OK)
+            if (m_pFtRead((FT_HANDLE)thisInstance->canusbContext, gbufferRx, nRxCnt, &nRcvCnt) == FT_OK)
             {
                 for (uint32_t i = 0; i < nRcvCnt; i++)
                 {

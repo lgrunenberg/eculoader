@@ -236,8 +236,8 @@ bool e39::secAccE39(uint8_t lev)
     if (ret[4] == 0 && ret[5] == 0)
     {
         log("Already granted");
-        // delete[] ret;
-        // return true;
+        delete[] ret;
+        return true;
     }
     else
     {
@@ -537,7 +537,7 @@ bool e39::initSessionE39A()
 */
 
         // Just to check if it returned states for some weird reason
-        // getSecBytes( 0x40015264, 0x40015259 );
+        getSecBytes( 0x40015264, 0x40015259 );
 
         log("Uploading bootloader");
 

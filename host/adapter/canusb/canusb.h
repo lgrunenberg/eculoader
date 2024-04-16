@@ -7,7 +7,7 @@
 
 extern "C"
 {
-#if defined (WIN32)
+#if defined (_WIN32)
 #include "../../libs/ftd2xx_win.h"
 #else
 #include "../../libs/ftd2xx_nix.h"
