@@ -23,7 +23,7 @@ blr
 # # # # # # # # # # # # # # # # # # # #
 # FIS
 ackTSR:
-    addis %r3, %r0, 0x0400
+    lis   %r3, 0x0400
     mtspr 336, %r3
 blr
 
@@ -52,7 +52,7 @@ intEntry:
     stw    %r0, 152(%sp)
 
     # Service watchdog
-    addis %r4, %r0, 0x4000
+    lis   %r4, 0x4000
     mtspr 336, %r4
 
     # r3 contains which vector

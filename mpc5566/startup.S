@@ -20,7 +20,7 @@ OurBase:
     # Flip FIE
     # Flip DEC
     mfspr   %r4, 340
-    addis   %r3, %r0, 0xCCDE
+    lis     %r3, 0xCCDE
     andc    %r4, %r4, %r3
     mtspr   340, %r4
 

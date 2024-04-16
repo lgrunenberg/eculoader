@@ -243,7 +243,9 @@ void *hashMD5(const uint32_t addr, const uint32_t len)
 	}
 
     for ( ; left < 64; left++)
+    {
         buf[left] = 0;
+    }
 
 	*stfu = bs32(len << 3);
 

@@ -1,5 +1,11 @@
 PROC=powerpc
+
+ifdef OS
 TYPE=eabi
+else
+# You need the SPE capable compiler
+TYPE=linux-gnuspe
+endif
 
 AS  = $(PROC)-$(TYPE)-as
 CC  = $(PROC)-$(TYPE)-gcc
@@ -34,10 +40,11 @@ MODFLAG += -DenableBroadcast
 
 # Not really the correct model but we get the right instruction set.
 # (Avoid float just to stay safe. Don't know how it'll behave)
-TARGPROC = -mcpu=ec603e -mspe -mno-toc -mbig-endian
+# -mcpu=ec603e
+TARGPROC = -mspe -mno-toc -mbig-endian
 GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC
 ASFLAGS  = $(TARGPROC) $(GLOBFLAGS) -c 
-CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -std=gnu99 -c
+CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -Werror -Wpedantic -std=gnu99 -c
 
 .PHONY: all
 
@@ -121,7 +128,7 @@ out/loader.bin : out/loader.elf
 	@$(OBJCOPY) -O binary  $< $@
 	@rm -f Bootloader_mpc5566.cs
 	@$(CSTOOL) out/loader.bin Bootloader_mpc5566
-	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/Bootloader_mpc5566.cs
+#	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/Bootloader_mpc5566.cs
 	@echo " "
 	@echo " "
 	@echo ___Main loader_________________
