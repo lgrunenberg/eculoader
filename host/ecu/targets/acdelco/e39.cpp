@@ -397,11 +397,16 @@ bool e39::initSessionE39()
 
 ///////////////////////////////////////////////////////////
 // e39a dump
+
 /*
 static key at    0x7C8
 static seed at   0x7D0
 
 SDA regs
+< Recovery >
+r13: 0x40021000
+
+< Main >
 r13: 0x40021000
 r14: 0x40001000
 r15: 0x40011000

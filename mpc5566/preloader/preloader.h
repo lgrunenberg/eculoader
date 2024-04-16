@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdint.h>
 
 // Linker magic; Refer to sections of main loader

@@ -131,7 +131,6 @@ out/loader.bin : out/loader.elf
 	@$(OBJCOPY) -O binary  $< $@
 	@rm -f Bootloader_mpc5566.cs
 	@$(CSTOOL) out/loader.bin Bootloader_mpc5566
-#	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/bootloaders/Bootloader_mpc5566.cs
 	@echo " "
 	@echo " "
 	@echo ___Main loader_________________
@@ -141,6 +140,7 @@ out/loader.bin : out/loader.elf
 	@$(SIZE) -B out/loader.elf $(PREOBJ)
 	@echo " "
 ifdef OS
+	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/bootloaders/Bootloader_mpc5566.cs
 	@./makehelper.bat
 else
 	@./makehelper.sh

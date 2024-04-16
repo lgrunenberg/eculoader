@@ -234,8 +234,12 @@ static void disable_Internal()
     if (modeWord != MODE_E78)
     {
         // Pad configuration 4
-        if (modeWord == MODE_E39)
+        if (modeWord == MODE_E39 || modeWord == MODE_E39A)
             *(volatile uint16_t *)0xC3F90048 = 0x203;
+
+        // e39a is only seen setting this to 1. It's never touched after
+        if (modeWord == MODE_E39A)
+            *(volatile uint8_t *)0xC3F90604 = 1;
 
         // Turn off since it's not used on this platform
         *(volatile uint32_t *)0xFFF9C000 = 0x4000; // DSPI D
@@ -322,13 +326,16 @@ static uint32_t mainExtract(const uint8_t *in, uint8_t *out)
     while (inpos < insize)
     {
         uint32_t flags = in[inpos++];
+
         for (uint32_t mask = 0x80; inpos < insize && mask; mask = (mask >> 1))
         {
             if (flags & mask)
             {
                 uint32_t length = ((in[inpos] >> 4) & 15) + 3;
                 uint32_t ofs    = ((in[inpos]&15)<<8 | in[inpos+1]) + 1;
+
                 inpos += 2;
+
                 for (uint32_t i = 0; i < length; i++)
                 {
                     out[outpos] = out[outpos - ofs];
@@ -336,7 +343,9 @@ static uint32_t mainExtract(const uint8_t *in, uint8_t *out)
                 }
             }
             else
+            {
                 out[outpos++] = in[inpos++];
+            }
         }
     }
 
