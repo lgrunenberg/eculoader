@@ -3,10 +3,11 @@
 #include <list>
 #include <stdio.h>
 #include <string.h>
+// libusb 0.1
 #include <usb.h>
 #include <iostream>
 
-#include "../lowlev/ftdi/ftd2xx.h"
+
 #include "canusb.h"
 
 using namespace std;
@@ -22,7 +23,10 @@ using namespace logger;
 // iProduct                2 CANUSB
 // iSerial                 3 LW17DV0O
 
-
+extern "C"
+{
+    static usb_dev_handle           *deviceHandle = nullptr;
+}
 
 std::list <std::string> canusb::findCANUSB() 
 {
@@ -101,11 +105,113 @@ void *canusb::m_open(string identifier)
     return nullptr;
 }
 
+canusb::canusb()
+{
+    // loadLibrary();
+}
+
 canusb::~canusb()
 {
     log("Canusb going down");
     this->close();
 }
+
+
+bool canusb::openChannel(FT_HANDLE ftHandle, int nSpeed)
+{
+    char buf[16] = {0x0d, 0x0d, 0x0d, 0};
+    DWORD retLen;
+
+    // FT_STATUS stat = FT_OK;
+    // list <uint32_t> canIDs = { 0x220, 0x238, 0x240, 0x258, 0x266 };
+    // list<uint32_t> canIDs = { 0x220, 0x238, 0x23c, 0x240, 0x258, 0x25c, 0x266 };
+    list<uint32_t> canIDs;
+    // list <uint32_t> canIDs = { 0x740, 0x741 };
+    // list <uint32_t> canIDs = {0};
+
+    // Clear old commands
+    FT_Purge(ftHandle, FT_PURGE_RX);
+    if (FT_Write((FT_HANDLE)ftHandle, buf, 3, &retLen) != FT_OK)
+    {
+        log("Write failed");
+        return false;
+    }
+
+    // Set CAN baudrate
+    sprintf(buf, "S%d\r", nSpeed);
+    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
+    if (FT_Write((FT_HANDLE)ftHandle, buf, 3, &retLen) != FT_OK)
+    {
+        log("Write failed");
+        return false;
+    }
+
+
+
+    sprintf(buf, "Z0\r"); // Fuck off, timestamps
+    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
+    if (FT_Write((FT_HANDLE)ftHandle, buf, 3, &retLen) != FT_OK)
+    {
+        log("Write failed");
+        return false;
+    }
+
+    if (!CalcAcceptanceFilters(ftHandle, canIDs))
+    {
+        log("Couldn't set can filters");
+    }
+
+    // Open device
+    strcpy( buf, "O\r" );
+    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
+    return  (FT_Write((FT_HANDLE)ftHandle, buf, 2, &retLen) == FT_OK) ? true : false;
+}
+
+
+
+bool canusb::CalcAcceptanceFilters(FT_HANDLE ftHandle, list<uint32_t> idList)
+{
+    uint32_t code = ~0;
+    uint32_t mask = 0;
+    DWORD retLen;
+    char buf[16];
+
+    if (idList.size() == 0)
+    {
+        code = 0;
+        mask = ~0;
+    }
+    else
+    {
+        for (uint32_t canID : idList)
+        {
+            if (canID == 0)
+            {
+                log("Found illegal id");
+                code = 0;
+                mask = ~0;
+                break;
+            }
+            code &= (canID & 0x7FF) << 5;
+            mask |= (canID & 0x7FF) << 5;
+        }
+    }
+
+    code |= code << 16;
+    mask |= mask << 16;
+
+    sprintf(buf, "M%08X\r", code);
+    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
+    if (FT_Write((FT_HANDLE)ftHandle, buf, 10, &retLen) != FT_OK)
+    {
+        return false;
+    }
+
+    sprintf(buf, "m%08X\r", mask);
+    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
+    return (FT_Write((FT_HANDLE)ftHandle, buf, 10, &retLen) == FT_OK) ? true : false;
+}
+
 
 list <string> canusb::adapterList()
 {
@@ -151,15 +257,15 @@ bool canusb::send(message_t *msg)
     return (FT_Write(canusbContext, txbuf, strlen(txbuf), &retLen) == FT_OK) ? true : false;
 }
 
-static bool closeChannel(FT_HANDLE ftHandle)
+bool canusb::closeChannel()
 {
     char buf[3] = { 'C', '\r', 0 };
     uint32_t retLen;
 
     // Close device
-    FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
+    FT_Purge(canusbContext, FT_PURGE_RX | FT_PURGE_TX);
 
-    return  (FT_Write(ftHandle, buf, 2, &retLen) == FT_OK) ? true : false;
+    return  (FT_Write(canusbContext, buf, 2, &retLen) == FT_OK) ? true : false;
 }
 
 bool canusb::close()
@@ -170,7 +276,7 @@ bool canusb::close()
 
     if (canusbContext && deviceHandle)
     {
-        if (!closeChannel(canusbContext))
+        if (!closeChannel())
         {
             // printf("Failed to close channel\n");
             // return FALSE;
@@ -486,7 +592,7 @@ void canusb::messageThread(canusb *thisInstance)
     log("Message thread going down");
 }
 
-bool canusb::open(std::string identifier)
+bool canusb::open(channelData device)
 {
     char dname[32] = {0};
 
@@ -496,7 +602,7 @@ bool canusb::open(std::string identifier)
     usb_find_busses();
     usb_find_devices();
 
-    if ((deviceHandle = this->m_open(identifier)))
+    if ((deviceHandle = (usb_dev_handle*)this->m_open(device.name)))
     {
         // Is it attached to a driver?
         if (usb_get_driver_np((usb_dev_handle*)deviceHandle, 0, dname, 31) == 0)
@@ -510,7 +616,7 @@ bool canusb::open(std::string identifier)
             }
         }
 
-        if (FT_OpenEx((PVOID)identifier.c_str(), FT_OPEN_BY_SERIAL_NUMBER, &canusbContext) == 0)
+        if (FT_OpenEx((PVOID)device.name.c_str(), FT_OPEN_BY_SERIAL_NUMBER, &canusbContext) == 0)
         {
             // Set latency to 2 ms.
             FT_SetLatencyTimer(canusbContext, 2);

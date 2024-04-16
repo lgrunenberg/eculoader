@@ -1,4 +1,9 @@
+
+ifeq ($(OS),Windows_NT)
 CXX="x86_64-w64-mingw32-c++.exe"
+else
+CXX=c++
+endif
 
 APP=testapp
 
@@ -8,7 +13,7 @@ CXXFLAGS=-Wall -std=c++11 -m64
 ifeq ($(OS),Windows_NT)
 LDFLAGS= -m64  -Llibs -lftd2xx -Llibs/kvaser/lib/x64 -lcanlib32
 else
-LDFLAGS=adapter/lowlev/ftdi/libftd2xx_x64.a -lusb -lpthread
+LDFLAGS=-Llibs -lftd2xx_x64 -lcanlib -lusb -lpthread
 endif
 
 

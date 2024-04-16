@@ -5,11 +5,6 @@
 
 #include "kvaser.h"
 
-extern "C"
-{
-#include "../../libs/kvaser/inc/canlib.h"
-}
-
 using namespace std;
 using namespace msgsys;
 using namespace logger;

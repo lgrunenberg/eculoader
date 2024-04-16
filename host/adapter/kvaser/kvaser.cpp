@@ -12,95 +12,233 @@ using namespace std;
 using namespace msgsys;
 using namespace logger;
 
-// 0bfd:0004 Kvaser AB USBcan II
-
-#define VENDOR_ID  0x0bfd
-#define PRODUCT_ID 0x0004
-/*
-static void kvaser::bahs(usb_device *dev)
+kvaser::kvaser()
 {
-
+    canInitializeLibrary();
 }
-*/
 
-std::list <std::string> kvaser::findUSBCANII()
+kvaser::~kvaser()
 {
-    struct usb_device *dev;
-    struct usb_bus *bus;
-    list <string> adapters;
+    this->close();
+}
 
-    uint usbcan2cnt = 0;
+list <string> kvaser::adapterList()
+{
+    list<string> adapters;
+    uint32_t card_channel = 0;
+    int32_t num = 0;
+    char name[256];
 
-    for (kvaserDesc_t *desc : kvaserList)
-        delete desc;
+    canStatus stat = canGetNumberOfChannels(&num);
 
-    for (bus = usb_get_busses(); bus; bus = bus->next)
-    for (dev = bus->devices;     dev; dev = dev->next)
+    for (int i = 0; (i < num) && (stat == canOK); i++)
     {
-        if (dev->descriptor.idVendor  == 0x0bfd) // KVASER
-        {
-            // kvaserDesc_t *desc = new kvaserDesc_t;
-            usb_dev_handle *handle;
+        name[0] = 0;
+        stat = canGetChannelData(i, canCHANNELDATA_DEVDESCR_ASCII, name, sizeof(name));
+        if (stat != canOK) continue;
 
-            switch (dev->descriptor.idProduct)
-            {
-            case 0x0004: // USBcan II
-                adapters.push_back(to_string(++usbcan2cnt) + ": USBcan II (p1)");
-                adapters.push_back(to_string(  usbcan2cnt) + ": USBcan II (p2)");
-                break;
-            default:
-                continue;
-            }
+        stat = canGetChannelData(i, canCHANNELDATA_CHAN_NO_ON_CARD, &card_channel, sizeof(card_channel));
+        if (stat != canOK) continue;
 
-
-/*
-            if (!(handle = usb_open(dev)))
-            {
-                log("Could not open");
-                continue;
-            }
-
-            usb_get_string_simple(handle, dev->descriptor.iManufacturer, VID, 256);
-            usb_get_string_simple(handle, dev->descriptor.iProduct     , PID, 256);
-            
-            // log(toString(VID));
-            // log(toString(PID));
-            adapters.push_back(toString(PID));
-
-
-            usb_close(handle);*/
-        }
+        string strname = toString(name) + " P" + to_string(card_channel);
+        adapters.push_back(strname);
     }
 
     return adapters;
 }
 
 
-
-kvaser::~kvaser()
+void kvasOnCall(CanHandle hnd, void* context, unsigned int evt)
 {
+    uint8_t msgData[128];
+    message_t msg;
+    unsigned int dlc, flags;
+    unsigned long ts;
+    long ID;
+
+    if (evt & canNOTIFY_RX)
+    {
+        while (canRead(hnd, &ID, msgData, &dlc, &flags, &ts) == canOK)
+        {
+            if (dlc > 8) {
+                log("Kvaser: unsup long msg");
+                dlc = 8;
+            }
+
+            for (uint32_t i = 0; i < dlc; i++)
+                msg.message[i] = msgData[i];
+
+            for (uint32_t i = dlc; i < 8; i++)
+                msg.message[i] = 0;
+
+            msg.length = dlc;
+            msg.timestamp = ts;
+            msg.id = ID;
+            messageReceive(&msg);
+        }
+    }
 }
 
-list <string> kvaser::adapterList()
+bool kvaser::m_open(channelData device, int chan)
 {
-    usb_init();
-    usb_find_busses();
-    usb_find_devices();
-    return findUSBCANII();
+    unsigned long bitPerSec = 0;
+    unsigned int tseg1 = 0;
+    unsigned int tseg2 = 0;
+    unsigned int sjw   = 0;
+    unsigned int samp  = 0;
+    unsigned int syncm = 0;
+
+    switch(device.bitrate)
+    {
+    case btr500k:
+        bitPerSec = canBITRATE_500K;
+        break;
+    case btr400k:
+        bitPerSec = 400000;
+        tseg1 = 17 - 1;
+        tseg2 =  3;
+        samp = 3;
+        sjw = 2;
+        break;
+    default:
+        log("Unknown bitrate");
+        return false;
+    }
+
+    kvaserHandle = (int32_t)canOpenChannel(chan, 0);
+    if (kvaserHandle < 0)
+    {
+        log("Could not retrieve handle");
+        return false;
+    }
+
+    if (canSetBusParams(kvaserHandle, bitPerSec, tseg1, tseg2, sjw, samp, syncm) != canOK)
+    {
+        log("Could not set bus parameters");
+        return false;
+    }
+
+    if (canBusOn(kvaserHandle) != canOK)
+    {
+        log("Could not open bus");
+        return false;
+    }
+
+    // canNOTIFY_REMOVED is not present on Linux
+
+    if (kvSetNotifyCallback(kvaserHandle, &kvasOnCall, 0, canNOTIFY_RX | canNOTIFY_ERROR/* | canNOTIFY_REMOVED*/) != canOK)
+    {
+        log("Could not install callback");
+        return false;
+    }
+
+    return CalcAcceptanceFilters(device.canIDs);
 }
 
+
+bool kvaser::CalcAcceptanceFilters(list<uint32_t> idList) 
+{
+    unsigned int code = ~0;
+    unsigned int mask = 0;
+
+    if (idList.size() > 0)
+    {
+        for (uint32_t canID : idList)
+        {
+            // log("Filter+ " + to_hex(canID));
+            if (canID == 0)
+            {
+                log("Found illegal id");
+                code = ~0;
+                mask = 0;
+                goto forbidden;
+            }
+
+            code &= canID;
+            mask |= canID;
+        }
+
+        mask = ~(code ^ mask);
+        // mask = (~mask & 0x7FF) | code;
+    }
+
+forbidden:
+
+
+    // Not implemented??
+/*
+    if (canSetAcceptanceFilter(kvaserHandle, code, mask, 0) != canOK)
+    {
+        log("Could not set acceptance filters");
+        return false;
+    }
+*/
+    return true;
+}
+
+bool kvaser::open(channelData device)
+{
+    string   name = device.name;
+    uint32_t card_channel = 0;
+    int32_t  num = 0;
+    char cname[100];
+
+    if (name.length() == 0)
+    {
+        return false;
+    }
+
+    log("Trying to open " + name);
+
+    canStatus stat = canGetNumberOfChannels(&num);
+
+    for (int i = 0; (i < num) && (stat == canOK); i++)
+    {
+        cname[0] = 0;
+        stat = canGetChannelData(i, canCHANNELDATA_DEVDESCR_ASCII, cname, sizeof(cname));
+        if (stat != canOK) continue;
+
+        stat = canGetChannelData(i, canCHANNELDATA_CHAN_NO_ON_CARD, &card_channel, sizeof(card_channel));
+        if (stat != canOK) continue;
+
+        string strname = toString(cname) + " P" + to_string(card_channel);
+
+        if (strname == name)
+        {
+            log("Device located. Opening channel " + to_string(i) + "..");
+            this->close();
+            return this->m_open(device, i);
+        }
+    }
+
+    return false;
+}
+
+/*
 bool kvaser::open(std::string)
 {
     log("Trying to open");
     return false;
 }
+*/
+
 
 bool kvaser::close()
 {
+    if (kvaserHandle != -1)
+    {
+        canBusOff((CanHandle)kvaserHandle);
+        canClose((CanHandle)kvaserHandle);
+        kvaserHandle = -1;
+    }
+
     return true;
 }
 
-bool kvaser::send(message_t*)
+bool kvaser::send(message_t *msg)
 {
+    if (kvaserHandle >= 0)
+        return (canWrite(kvaserHandle, (long)msg->id, &msg->message, (unsigned int)msg->length, 0) == canOK);
+
     return false;
 }

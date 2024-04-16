@@ -5,6 +5,15 @@
 #include "../adapter.h"
 #include "../../tools/tools.h"
 
+extern "C"
+{
+#if defined (WIN32)
+#include "../../libs/kvaser/inc/canlib.h"
+#else
+#include "../../libs/kvaser/linux/include/canlib.h"
+#endif
+}
+
 class kvaser : public adapter_t
 {
 public:
@@ -18,7 +27,7 @@ private:
     bool CalcAcceptanceFilters(std::list<uint32_t>) ;
     void messageThread(kvaser *);
     bool m_open(channelData, int);
-    int kvaserHandle = -1;
+    CanHandle kvaserHandle = -1;
 };
 
 #endif

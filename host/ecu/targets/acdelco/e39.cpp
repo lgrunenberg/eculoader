@@ -680,7 +680,7 @@ bool e39::dump()
 
     initSessionE39A();
 
-    return false;
+    // return false;
 
     if (loader_StartRoutineById(0, 0, 0x300000))
     {
