@@ -55,7 +55,9 @@ First consec | 0  0  0  1   DL hi  |  DL lo  |   N/A   |   (1X, XX ..)
 Consecutive  | 0  0  1  0     SN   |   N/A   |   N/A   |   (21, 22, 23 .. 29, 20, 21 ..)
 Flow Control | 0  0  1  1     FS   |   BS    |  STmin  |   (3X, XX, XX)
 Extrapolated:
+
 Exd single   | 0  1  0  0   addr?  | ????:dl |   N/A   |   101 [41 92    (1a 79)   00000000]
+
 */
 
 uint8_t *gmlan::sendRequest(uint8_t *req, uint16_t len)
@@ -155,7 +157,6 @@ uint8_t *gmlan::sendRequest(uint8_t *req, uint16_t len)
 
 busyWait:
 
-#warning "Restore to 500"
     rMsg = waitMessage(500);
     if (rMsg->id != this->targetID)
     {
@@ -383,31 +384,169 @@ uint8_t *gmlan::readMemoryByAddress_24_16(uint32_t address, uint32_t len, uint32
     return dataBuf;
 }
 
-// 28
-bool gmlan::disableNormalCommunication()
+// 23
+// Read from a 32-bit address using a 16-bit size argument
+uint8_t *gmlan::readMemoryByAddress_32_16(uint32_t address, uint32_t len, uint32_t blockSize)
 {
-    uint8_t *ret, buf[8] = { 0x28 };
+    if (len == 0) return 0;
 
-    if ((ret = sendRequest(buf, 1)) == 0) return false;
+    uint8_t  *ret, buf[8] = { 0x23 };
+    uint8_t *dataBuf = new uint8_t[len];
+    uint32_t dataLeft = len;
+    uint32_t dataPtr = 0;
 
-    if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0x68)
+    while (dataLeft > 0)
     {
+        uint32_t thisLen = (dataLeft > blockSize) ? blockSize : dataLeft;
+        buf[1] = (address >> 24);
+        buf[2] = (address >> 16);
+        buf[3] = (address >> 8);
+        buf[4] = address;
+        buf[5] = (thisLen >> 8);
+        buf[6] = thisLen;
+
+        if ((ret = sendRequest(buf, 7)) == 0)
+        {
+            log("No retbuffer for read by address");
+            delete[] dataBuf;
+            return 0;
+        }
+
+        if ((uint32_t)(ret[0] << 8 | ret[1]) != (thisLen + 5) || ret[2] != 0x63)
+        {
+            log("Read unexpected response");
+            delete[] ret;
+            delete[] dataBuf;
+            return 0;
+        }
+
+        // xx xx 63 HH MM LL .. .. ..
+        for (uint32_t i = 0; i < thisLen; i++)
+            dataBuf[dataPtr + i] = ret[(7) + i];
+
         delete[] ret;
+        dataLeft-=thisLen;
+        address+=thisLen;
+        dataPtr+=thisLen;
+    }
+
+    return dataBuf;
+}
+
+#warning "Correct response"
+
+// 23
+// Read from a 32-bit address using a 24-bit size argument
+uint8_t *gmlan::readMemoryByAddress_32_24(uint32_t address, uint32_t len, uint32_t blockSize)
+{
+    if (len == 0) return 0;
+
+    uint8_t  *ret, buf[10] = { 0x23 };
+    uint8_t *dataBuf = new uint8_t[len];
+    uint32_t dataLeft = len;
+    uint32_t dataPtr = 0;
+
+    while (dataLeft > 0)
+    {
+        uint32_t thisLen = (dataLeft > blockSize) ? blockSize : dataLeft;
+        buf[1] = (address >> 24);
+        buf[2] = (address >> 16);
+        buf[3] = (address >> 8);
+        buf[4] = address;
+
+        buf[5] = (thisLen >> 16);
+        buf[6] = (thisLen >> 8);
+        buf[7] = thisLen;
+
+        if ((ret = sendRequest(buf, 8)) == 0)
+        {
+            log("No retbuffer for read by address");
+            delete[] dataBuf;
+            return 0;
+        }
+
+        if ((uint32_t)(ret[0] << 8 | ret[1]) != (thisLen + 4) || ret[2] != 0x63)
+        {
+            log("Read unexpected response");
+            delete[] ret;
+            delete[] dataBuf;
+            return 0;
+        }
+
+        // xx xx 63 HH MM LL .. .. ..
+        for (uint32_t i = 0; i < thisLen; i++)
+            dataBuf[dataPtr + i] = ret[(6) + i];
+
+        delete[] ret;
+        dataLeft-=thisLen;
+        address+=thisLen;
+        dataPtr+=thisLen;
+    }
+
+    return dataBuf;
+}
+
+// Weird responses will not be interpreted as they should
+#warning "This is not compliant"
+
+// 28
+bool gmlan::disableNormalCommunication(int exdAddr)
+{
+    message_t sMsg = newMessage(this->testerID, 8);
+
+    if (exdAddr >= 0 && exdAddr <= 0xff)
+    {
+        sMsg.id = 0x101;
+        sMsg.message[0] = (uint8_t)exdAddr;
+        sMsg.message[1] = 0x01;
+        sMsg.message[2] = 0x28;
+    }
+    else
+    {
+        sMsg.message[0] = 0x01;
+        sMsg.message[1] = 0x28;
+    }
+
+    setupWaitMessage(this->targetID);
+
+    if(!send(&sMsg))
+    {
+        log("Could not send!");
         return false;
     }
 
-    delete[] ret;
-    return true;
+    message_t *rMsg = waitMessage(500);
+    return (
+        rMsg->message[0] < 8 &&
+        rMsg->message[0] > 0 &&
+        rMsg->message[1] == 0x68) ? true : false;
 }
 
 // 28
-void gmlan::disableNormalCommunicationNoResp()
+bool gmlan::disableNormalCommunicationNoResp(int exdAddr)
 {
-    message_t  sMsg = newMessage(this->testerID, 8);
-    sMsg.message[0] = 0x01;
-    sMsg.message[1] = 0x28;
+    message_t sMsg = newMessage(this->testerID, 8);
+
+    if (exdAddr >= 0 && exdAddr <= 0xff)
+    {
+        sMsg.id = 0x101;
+        sMsg.message[0] = (uint8_t)exdAddr;
+        sMsg.message[1] = 0x01;
+        sMsg.message[2] = 0x28;
+    }
+    else
+    {
+        sMsg.message[0] = 0x01;
+        sMsg.message[1] = 0x28;
+    }
+
     if(!send(&sMsg))
+    {
         log("Could not send!");
+        return false;
+    }
+
+    return true;
 }
 
 // 34
@@ -573,18 +712,44 @@ bool gmlan::WriteDataByIdentifier(const uint8_t *dat, uint8_t id, uint32_t len)
     return true;
 }
 
+
+#warning "Mend"
+
 // 3e
-bool gmlan::testerPresent()
+bool gmlan::testerPresent(int exdAddr)
 {
     message_t sMsg = newMessage(this->testerID, 8);
-    sMsg.message[0] = 0x01;
-    sMsg.message[1] = 0x3e;
-    setupWaitMessage(this->targetID);
-    if(!send(&sMsg))
+
+    if (exdAddr >= 0 && exdAddr <= 0xff)
     {
-        log("Could not send!");
-        return false;
+        sMsg.id = 0x101;
+
+        sMsg.message[0] = (uint8_t)exdAddr;
+        sMsg.message[1] = 0x01;
+        sMsg.message[2] = 0x3e;
+
+        if(!send(&sMsg))
+        {
+            log("Could not send!");
+            return false;
+        }
+
+        return true;
     }
+    else
+    {
+        sMsg.message[0] = 0x01;
+        sMsg.message[1] = 0x3e;
+
+        setupWaitMessage(this->targetID);
+
+        if(!send(&sMsg))
+        {
+            log("Could not send!");
+            return false;
+        }
+    }
+
     message_t *rMsg = waitMessage(500);
     return (rMsg->message[0] < 8 && rMsg->message[1] == 0x7e) ? true : false;
 }

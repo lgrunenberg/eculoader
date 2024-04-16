@@ -72,12 +72,14 @@ public:
     uint8_t *readMemoryByAddress_16_16(uint32_t address, uint32_t len, uint32_t blockSize = 0x80);
     uint8_t *readMemoryByAddress_24_8 (uint32_t address, uint32_t len, uint32_t blockSize = 0x80);
     uint8_t *readMemoryByAddress_24_16(uint32_t address, uint32_t len, uint32_t blockSize = 0x80);
+
     uint8_t *readMemoryByAddress_32_8 (uint32_t address, uint32_t len, uint32_t blockSize = 0x80);
     uint8_t *readMemoryByAddress_32_16(uint32_t address, uint32_t len, uint32_t blockSize = 0x80);
+    uint8_t *readMemoryByAddress_32_24(uint32_t address, uint32_t len, uint32_t blockSize = 0x80);
 
     // 28
-    bool disableNormalCommunication();
-    void disableNormalCommunicationNoResp();
+    bool disableNormalCommunication(int exdAddr = -1);
+    bool disableNormalCommunicationNoResp(int exdAddr = -1);
 
     // 34
     bool requestDownload_16(uint32_t size, uint8_t fmt = 0);
@@ -92,7 +94,8 @@ public:
     bool WriteDataByIdentifier(const uint8_t *dat, uint8_t id, uint32_t len);
 
     // 3e
-    bool testerPresent();
+    // Note: Setting extended address makes it broadcast the message with id 101
+    bool testerPresent(int exdAddr = -1);
 
     // a2
     bool ReportProgrammedState();

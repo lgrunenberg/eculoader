@@ -62,8 +62,9 @@ static void prepMain()
 
 int main()
 {
+    // adapterKvaser, adapterCanUsb
     string adapterList = "";
-    list <string> adapters = ecu.listAdapters( adapterCanUsb );
+    list <string> adapters = ecu.listAdapters( adapterKvaser );
 
     prepMain();
 

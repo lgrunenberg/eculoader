@@ -77,7 +77,7 @@ MMU_NukeL:
 
     tlbsync
 
-# It required padding. This was PERFECT! ;)
+# The table needs 4 bytes of padding so this did the trick
 MMUDATA:     
 blr
 
@@ -86,6 +86,7 @@ blr
 # If it's good enough for freescale, it's good enough for us.
 # Restore defaults for page 3 before the other ones to circumvent a crash on e39
 .long   0x10030000,   0xC0000400,   0x40000008,   0x4000003F
+
 .long   0x10000000,   0xC0000500,   0xFFF0000A,   0xFFF0003F
 .long   0x10010000,   0xC0000700,            0,         0x3F
 .long   0x10020000,   0xC0000700,   0x20000000,         0x3F

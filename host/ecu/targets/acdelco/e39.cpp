@@ -5,6 +5,9 @@
 
 #include "../../../tools/tools.h"
 
+
+#include <cstring>
+
 using namespace logger;
 using namespace timer;
 using namespace std;
@@ -187,14 +190,28 @@ bool e39::bamFlash(uint32_t address)
     return false;
 }
 
-
+// Calculated key e7f0 from seed a7a1
 
 static void calculateKeyForE39(uint8_t *seed)
 {
     uint32_t _seed = seed[0] << 8 | seed[1];
-    _seed = (_seed + 0x6C50) & 0xFFFF;
-    _seed = ((_seed << 8 | _seed >> 8) - 0x22DA) & 0xffff;
-    _seed = ((_seed << 9 | _seed >> 7) - 0x8BAC);
+    uint32_t origSeed = _seed;
+
+    if ( _seed != 0xffff )
+    {
+        _seed = (_seed + 0x6C50) & 0xFFFF;
+        _seed = ((_seed << 8 | _seed >> 8) - 0x22DA) & 0xffff;
+        _seed = ((_seed << 9 | _seed >> 7) - 0x8BAC);
+    }
+    else
+    {
+        _seed = 1;
+    }
+
+    _seed &= 0xffff;
+
+    log("Calculated key " + to_hex(_seed, 2) + " from seed " + to_hex(origSeed, 2));
+
     seed[0] = _seed >> 8;
     seed[1] = _seed;
 }
@@ -219,11 +236,13 @@ bool e39::secAccE39(uint8_t lev)
     if (ret[4] == 0 && ret[5] == 0)
     {
         log("Already granted");
-        delete[] ret;
-        return true;
+        // delete[] ret;
+        // return true;
     }
-
-    calculateKeyForE39(&ret[4]);
+    else
+    {
+        calculateKeyForE39( &ret[4] );
+    }
 
     buf[0] = 0x27;
     buf[1] = lev + 1;
@@ -247,16 +266,21 @@ bool e39::secAccE39(uint8_t lev)
     return true;
 }
 
+/*
+7e8 E 017eaaaaaaaaaaaa     1,362
+7e0 H 053400001f200000   103,245
+7e8 E 037f3422aaaaaaaa     3,004
+*/
 
-bool e39::dump()
+
+
+
+bool e39::initSessionE39()
 {
-    log("Dump");
+    fileManager fm;
+    string ident = "";
+    uint8_t *tmp;
 
-
-    // bamFlash(0x40004000);
-    // return false;
-
-    configProtocol();
 
 
     testerPresent();
@@ -266,8 +290,6 @@ bool e39::dump()
 
     log("Checking loader state..");
 
-    string ident = "";
-    uint8_t *tmp;
     if ( (tmp = ReadDataByIdentifier(0x90)) != nullptr )
     {
         uint32_t retLen = (tmp[0] << 8 | tmp[1]);
@@ -279,7 +301,13 @@ bool e39::dump()
     if ( ident != "MPC5566-LOADER: TXSUITE.ORG" )
     {
         log("Loader not active. Starting upload..");
-        InitiateDiagnosticOperation(3); // 10
+
+        if ( !InitiateDiagnosticOperation(3) ) // 10
+        {
+            log("initDiag error");
+            return false;
+        }
+
         sleepMS(10);
 
         disableNormalCommunication(); // 28
@@ -302,48 +330,23 @@ bool e39::dump()
 
         testerPresent();
 
-/*
-        uint8_t toWrite[512];
-        for (uint32_t i = 0; i < 0x100; i++)
-        {
-            uint8_t *ret = ReadDataByIdentifier(i);
 
-            if (ret)
-            {
-                string gotString = "";
-                string charString = "";
-                uint16_t retLen = (ret[0] << 8 | ret[1]);
-                for (uint32_t sr = 0; sr < retLen; sr++)
-                {
-                    gotString += to_hex((volatile uint32_t)ret[sr + 2], 1);
-                    if (ret[sr + 2] >= 0x20 && ret[sr + 2] < 0x7f)
-                    {
-                        charString += ret[sr + 2];
-                    }
-                    ret[sr + 2] = (uint8_t)rand();
-                }
-                log("id " + to_hex(i,1) + ": " + gotString + "   (" + charString + ")");
 
-                //
-                // WriteDataByIdentifier(i, &ret[2], retLen);
-                testerPresent();
-            }
-        }
+        sleepMS( 100 );
 
-        return false;
-*/
 
-        fileManager fm;
+
         fileHandle *file = fm.open("../mpc5566/out/loader.bin");
-
-        // 
-
 
         if (!file || file->size < (6 * 1024))
         {
             log("No file or too small");
             return false;
         }
+
+
+
+
 
         uint32_t alignedSize = (file->size + 15) & ~15;
         uint8_t *tmpBuf = new uint8_t[ alignedSize ];
@@ -355,24 +358,25 @@ bool e39::dump()
 
         memcpy(tmpBuf, file->data, file->size);
 
-        tmpBuf[4] = modeE39A >> 24;
-        tmpBuf[5] = modeE39A >> 16;
-        tmpBuf[6] = modeE39A >> 8;
-        tmpBuf[7] = modeE39A;
+        tmpBuf[4] = modeE39 >> 24;
+        tmpBuf[5] = modeE39 >> 16;
+        tmpBuf[6] = modeE39 >> 8;
+        tmpBuf[7] = modeE39;
 
         log("Uploading bootloader");
 
         // The morons use a weird request without the format byte..
-        if (!requestDownload_24(alignedSize))
+        if (!requestDownload_24( alignedSize ))
         {
+            // The 39a log shows the ECU outright refusing but still accepting a transfer after. Weird fella..
+
             log("Could not upload bootloader");
             delete[] tmpBuf;
             return false;
         }
 
-        // return false;
-
         testerPresent();
+
         if (!transferData_32(tmpBuf, 0x40004000, alignedSize, 0x80, true))
         {
             log("Could not upload bootloader");
@@ -387,6 +391,296 @@ bool e39::dump()
     {
         log("Bootloader already active");
     }
+
+    return true;
+}
+
+///////////////////////////////////////////////////////////
+// e39a dump
+/*
+static key at    0x7C8
+static seed at   0x7D0
+
+SDA regs
+r13: 0x40021000
+r14: 0x40001000
+r15: 0x40011000
+
+0x40015264 - secAccLocked     , byte
+0x40015259 - progModeEnabled  , byte
+
+< Blocked reads >
+400003a0
+400003b0
+400003c0
+400003d0
+400003e0
+400003f0
+40000400
+40000410
+40000420
+
+40000870
+40000880
+
+< Outright crashed while trying to read these >
+40007bc0
+40007bd0
+*/
+
+
+bool e39::getSecBytes(uint32_t secLockAddr, uint32_t progModeAddr)
+{
+    uint8_t *b;
+    
+    if ( (b = readMemoryByAddress_32_16(secLockAddr, 1, 1)) != nullptr )
+    {
+        log("secLock: " + to_hex((volatile uint32_t)*b, 1));
+        delete[] b;
+    }
+
+    if ( (b = readMemoryByAddress_32_16(progModeAddr, 1, 1)) != nullptr )
+    {
+        log("progMode: " + to_hex((volatile uint32_t)*b, 1));
+        delete[] b;
+    }
+
+    return true;
+}
+
+bool e39::initSessionE39A()
+{
+    fileManager fm;
+    string ident = "";
+    uint8_t *tmp;
+
+
+
+    testerPresent();
+    sleepMS(20);
+    testerPresent();
+    sleepMS(20);
+
+    log("Checking loader state..");
+
+    if ( (tmp = ReadDataByIdentifier(0x90)) != nullptr )
+    {
+        uint32_t retLen = (tmp[0] << 8 | tmp[1]);
+        for (uint32_t i = 0; i < retLen; i++)
+            ident += tmp[i + 2];
+        delete[] tmp;
+    }
+
+    if ( ident != "MPC5566-LOADER: TXSUITE.ORG" )
+    {
+        log("Loader not active. Starting upload..");
+
+// TODO: Investigate why it SOMETIMES wants this to be two
+        if ( !InitiateDiagnosticOperation(3) ) // 10
+        {
+            log("initDiag error");
+            return false;
+        }
+
+        sleepMS(10);
+
+        sleepMS(10);
+
+        disableNormalCommunication(); // 28
+        sleepMS(10);
+
+        testerPresent();
+
+        if (!secAccE39( 1 ))
+        {
+            log("Could not gain security access");
+            return false;
+        }
+
+        testerPresent();
+        if (!ProgrammingMode(1))
+            return false;
+
+        // Won't give a response
+        ProgrammingMode(3);
+
+        testerPresent();
+
+        sleepMS( 100 );
+
+        fileHandle *file = fm.open("../mpc5566/out/loader.bin");
+
+        if (!file || file->size < (6 * 1024))
+        {
+            log("No file or too small");
+            return false;
+        }
+
+        log("Really here");
+
+        uint32_t alignedSize = (file->size + 15) & ~15;
+        uint8_t *tmpBuf = new uint8_t[ alignedSize ];
+        if (tmpBuf == nullptr)
+        {
+            log("Could not allocate buffer");
+            return false;
+        }
+
+        memcpy(tmpBuf, file->data, file->size);
+
+        // Mine couldn't care less?
+/*
+        tmpBuf[4] = modeE39A >> 24;
+        tmpBuf[5] = modeE39A >> 16;
+        tmpBuf[6] = modeE39A >> 8;
+        tmpBuf[7] = modeE39A;
+*/
+
+        // Just to check if it returned states for some weird reason
+        // getSecBytes( 0x40015264, 0x40015259 );
+
+        log("Uploading bootloader");
+
+        // The morons use a weird request without the format byte..
+        if (!requestDownload_24( alignedSize ))
+        {
+            // The 39a log shows the ECU outright refusing but still accepting a transfer after. Weird fella..
+
+            log("Could not upload bootloader");
+            delete[] tmpBuf;
+            return false;
+        }
+
+        testerPresent();
+
+        if (!transferData_32(tmpBuf, 0x40004000, alignedSize, 0x80, true))
+        {
+            log("Could not upload bootloader");
+            delete[] tmpBuf;
+            return false;
+        }
+
+        log("Bootloader uploaded");
+        delete[] tmpBuf;
+    }
+    else
+    {
+        log("Bootloader already active");
+    }
+
+    return true;
+}
+
+bool e39::play()
+{
+    testerPresent();
+    sleepMS(20);
+    testerPresent();
+    sleepMS(20);
+
+    InitiateDiagnosticOperation(3); // 10
+    sleepMS(10);
+
+    disableNormalCommunication(); // 28
+    sleepMS(10);
+
+    testerPresent();
+
+    if (!secAccE39(1))
+    {
+        log("Could not gain security access");
+        return false;
+    }
+
+    testerPresent();
+    if (!ProgrammingMode(1))
+        return false;
+
+    // Won't give a response
+    ProgrammingMode(3);
+
+    testerPresent();
+
+
+    uint8_t *b;
+
+    if ( !InitiateDiagnosticOperation(2) ) // 10
+    {
+        log("Init diag error");
+        return false;
+    }
+
+    sleepMS(10);
+
+    disableNormalCommunication(); // 28
+    sleepMS(100);
+
+    testerPresent();
+
+    // Not allowed to read more than 16 bytes per chunk on e39/a
+    const uint32_t chunkSz = 16;
+
+
+    const uint32_t agSz = 16;
+    uint32_t totLen = 128 * 1024;
+
+    uint32_t lenLeft = totLen;
+
+    uint32_t bufIdx = 0;
+    uint32_t rdAddr = 0x40000000;
+
+
+    uint8_t *buf = new uint8_t[ totLen ];
+
+    memset(buf, 0x00, totLen);
+
+    while ( lenLeft != 0 )
+    {
+        testerPresent();
+
+        // Not allowed to read more than 16 bytes in one go!
+        if ( (b = readMemoryByAddress_32_16(rdAddr, agSz, chunkSz)) != nullptr )
+        {
+            
+            memcpy(&buf[bufIdx], b, agSz);
+
+            delete[] b;
+        }
+        else
+        {
+            log("Failed addres: " + to_hex(rdAddr, 4));
+        }
+
+        bufIdx += agSz;
+        rdAddr += agSz;
+        lenLeft -= agSz;
+
+    }
+
+    fileManager fm;
+    fm.write("ramdump.bin", buf, totLen);
+
+    delete[] buf;
+
+    return false;
+}
+
+
+bool e39::dump()
+{
+    log("Dump");
+
+
+    // bamFlash(0x40004000);
+    // return false;
+
+    configProtocol();
+
+    // play();
+
+    initSessionE39A();
+
+    return false;
 
     if (loader_StartRoutineById(0, 0, 0x300000))
     {
@@ -446,7 +740,3 @@ bool e39::dump()
 
     return true;
 }
-
-
-
-
