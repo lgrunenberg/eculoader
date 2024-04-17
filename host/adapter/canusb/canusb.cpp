@@ -20,6 +20,8 @@ using namespace logger;
 #define VENDOR_ID  0x0403
 #define PRODUCT_ID 0x6001
 
+#warning "Exceptionally unstable on Windows - fix"
+
 extern "C"
 {
 #if defined (_WIN32)
