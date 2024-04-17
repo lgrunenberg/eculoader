@@ -41,26 +41,11 @@ out/adapter.o: adapter/adapter.cpp
 out/message.o: adapter/message.cpp
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
-
-
-ifeq ($(OS),Windows_NT)
-
-out/canusb.o: adapter/canusb/canusb_win.cpp
-	@$(CXX) $(CXXFLAGS) -c $< -o $@
-
-out/kvaser.o: adapter/kvaser/kvaser_win.cpp
-	@$(CXX) $(CXXFLAGS) -c $< -o $@
-
-else
-
 out/canusb.o: adapter/canusb/canusb.cpp
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 out/kvaser.o: adapter/kvaser/kvaser.cpp
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
-
-endif
-
 
 # # #
 # Commnunication protocols

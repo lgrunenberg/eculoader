@@ -24,6 +24,8 @@ enum enBitrate
 {
     btr500k,
     btr400k,
+    btr300k,
+    btr200k,
 };
 
 typedef struct {
@@ -40,7 +42,7 @@ public:
     // explicit adapter_t();
     virtual ~adapter_t() = 0;
     virtual std::list <std::string> adapterList() = 0;
-    virtual bool open(channelData) = 0;
+    virtual bool open(channelData&) = 0;
     virtual bool close() = 0;
     virtual bool send(msgsys::message_t*) = 0;
 };
@@ -52,7 +54,7 @@ public:
     ~adapter();
 	std::list <std::string> listAdapters(adaptertypes);
 	// std::list <std::string> listAdapters(adaptertypes);
-	bool open(channelData/*std::string*/);
+	bool open(channelData&);
 	bool close();
 	bool send(msgsys::message_t*);
 protected:

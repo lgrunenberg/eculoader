@@ -20,7 +20,7 @@ public:
     explicit kvaser();
     ~kvaser();
     std::list <std::string> adapterList();
-    bool open(channelData);
+    bool open(channelData&);
     bool close();
     bool send(msgsys::message_t*);
 private:

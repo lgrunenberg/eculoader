@@ -8,6 +8,8 @@
 #include "canusb/canusb.h"
 #include "kvaser/kvaser.h"
 
+#include <iostream>
+
 using namespace std;
 using namespace msgsys;
 using namespace std::chrono;
@@ -85,7 +87,7 @@ list <string> adapter::listAdapters(adaptertypes adapter)
 	return adapterContext->adapterList();	
 }
 
-bool adapter::open(channelData device)
+bool adapter::open(channelData & device)
 {
 /*
 	if (!setAdapter(adapter))
@@ -95,15 +97,12 @@ bool adapter::open(channelData device)
 
 	if (adapterContext->open(device))
 	{
-		// sleep(1);
         sleepMS(1000);
 		return true;
 	}
 
 	return false;
 }
-
-#include <iostream>
 
 bool adapter::close()
 {

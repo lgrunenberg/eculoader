@@ -22,7 +22,7 @@ public:
 	~canusb();
 
 	std::list <std::string> adapterList();
-	bool                    open(channelData);
+	bool                    open(channelData &);
 	bool                    close();
     bool                    send(msgsys::message_t*);
 
@@ -43,7 +43,7 @@ private:
     bool closeChannel();
 
 
-    bool openChannel(FT_HANDLE, int);
+    bool openChannel(FT_HANDLE, channelData &);
     bool CalcAcceptanceFilters(FT_HANDLE, std::list <uint32_t>);
 };
 

@@ -1,10 +1,9 @@
 #include <cstdio>
 #include <string>
 #include <list>
-#include <stdio.h>
-#include <string.h>
-#include <usb.h>
 #include <iostream>
+
+// #include <usb.h>
 
 #include "kvaser.h"
 
@@ -47,6 +46,57 @@ list <string> kvaser::adapterList()
     return adapters;
 }
 
+bool kvaser::close()
+{
+    if (kvaserHandle != -1)
+    {
+        canBusOff((CanHandle)kvaserHandle);
+        canClose((CanHandle)kvaserHandle);
+        kvaserHandle = -1;
+    }
+
+    return true;
+}
+
+
+bool kvaser::CalcAcceptanceFilters(list<uint32_t> idList) 
+{
+    unsigned int code = ~0;
+    unsigned int mask = 0;
+
+    if (idList.size() > 0)
+    {
+        for (uint32_t canID : idList)
+        {
+            // log("Filter+ " + to_hex(canID));
+            if (canID == 0)
+            {
+                log("Found illegal id");
+                code = ~0;
+                mask = 0;
+                goto forbidden;
+            }
+
+            code &= canID;
+            mask |= canID;
+        }
+
+        mask = ~(code ^ mask);
+        // mask = (~mask & 0x7FF) | code;
+    }
+
+forbidden:
+
+    // Not implemented??
+/*
+    if (canSetAcceptanceFilter(kvaserHandle, code, mask, 0) != canOK)
+    {
+        log("Could not set acceptance filters");
+        return false;
+    }
+*/
+    return true;
+}
 
 void kvasOnCall(CanHandle hnd, void* context, unsigned int evt)
 {
@@ -125,9 +175,11 @@ bool kvaser::m_open(channelData device, int chan)
     }
 
     // canNOTIFY_REMOVED is not present on Linux
-
-    if (kvSetNotifyCallback(kvaserHandle, &kvasOnCall, 0, canNOTIFY_RX | canNOTIFY_ERROR/* | canNOTIFY_REMOVED*/) != canOK)
-    {
+#if defined (_WIN32)
+    if (kvSetNotifyCallback(kvaserHandle, &kvasOnCall, 0, canNOTIFY_RX | canNOTIFY_ERROR | canNOTIFY_REMOVED) != canOK) {
+#else
+    if (kvSetNotifyCallback(kvaserHandle, &kvasOnCall, 0, canNOTIFY_RX | canNOTIFY_ERROR) != canOK) {
+#endif
         log("Could not install callback");
         return false;
     }
@@ -135,48 +187,7 @@ bool kvaser::m_open(channelData device, int chan)
     return CalcAcceptanceFilters(device.canIDs);
 }
 
-
-bool kvaser::CalcAcceptanceFilters(list<uint32_t> idList) 
-{
-    unsigned int code = ~0;
-    unsigned int mask = 0;
-
-    if (idList.size() > 0)
-    {
-        for (uint32_t canID : idList)
-        {
-            // log("Filter+ " + to_hex(canID));
-            if (canID == 0)
-            {
-                log("Found illegal id");
-                code = ~0;
-                mask = 0;
-                goto forbidden;
-            }
-
-            code &= canID;
-            mask |= canID;
-        }
-
-        mask = ~(code ^ mask);
-        // mask = (~mask & 0x7FF) | code;
-    }
-
-forbidden:
-
-
-    // Not implemented??
-/*
-    if (canSetAcceptanceFilter(kvaserHandle, code, mask, 0) != canOK)
-    {
-        log("Could not set acceptance filters");
-        return false;
-    }
-*/
-    return true;
-}
-
-bool kvaser::open(channelData device)
+bool kvaser::open(channelData & device)
 {
     string   name = device.name;
     uint32_t card_channel = 0;
@@ -212,27 +223,6 @@ bool kvaser::open(channelData device)
     }
 
     return false;
-}
-
-/*
-bool kvaser::open(std::string)
-{
-    log("Trying to open");
-    return false;
-}
-*/
-
-
-bool kvaser::close()
-{
-    if (kvaserHandle != -1)
-    {
-        canBusOff((CanHandle)kvaserHandle);
-        canClose((CanHandle)kvaserHandle);
-        kvaserHandle = -1;
-    }
-
-    return true;
 }
 
 bool kvaser::send(message_t *msg)
