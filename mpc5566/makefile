@@ -45,7 +45,7 @@ TARGPROC = -mcpu=ec603e -mspe -mno-toc -mbig-endian
 else
 TARGPROC = -mspe -mno-toc -mbig-endian
 endif
-GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC
+GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC -I../sysfiles
 ASFLAGS  = $(TARGPROC) $(GLOBFLAGS) -c 
 CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -Werror -Wpedantic -std=gnu99 -c
 

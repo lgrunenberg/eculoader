@@ -4,6 +4,8 @@
 // Flashing, Dumping, anything accessible by the host
 // MD5..
 #include "mainloader.h"
+#include "mpc55xx.h"
+#include "../config.h"
 
 // Os f*cks with or / and during while operations of volatile memory
 #pragma GCC push_options
@@ -37,32 +39,21 @@ volatile uint32_t msTimer = 0;
 
 void broadcastMessage()
 {
-#ifdef enableDebugBOX
-    uint32_t *box = (uint32_t*)(0xFFFC0080 + 0x30);
-#else
-    uint32_t *box = (uint32_t*)(0xFFFC0080 + 0x20);
-#endif
-
-    *box  |= 0x0C000000;
+    CAN_A_BOX[ CANBOX_BRC ].CODE |= 0x0C;
 }
 
 static void preloadBroadcast()
 {
-#ifdef enableDebugBOX
-    uint32_t *box = (uint32_t*)(0xFFFC0080 + 0x30);
-#else
-    uint32_t *box = (uint32_t*)(0xFFFC0080 + 0x20);
-#endif
+    uint8_t *data = CAN_A_BOX[ CANBOX_BRC ].data;
 
-    uint8_t  *boxData = (uint8_t *)&box[2];
-
-    boxData[0] = 0xFE;
-    boxData[1] = 0x01;
-    boxData[2] = 0x3E;
+    data[ 0 ] = 0xFE;
+    data[ 1 ] = 0x01;
+    data[ 2 ] = 0x3E;
 
     for (int i = 3; i < 8; i++)
-        boxData[ i ] = 0;
+        data[ i ] = 0;
 }
+
 #endif
 
 /////////////////////////////////////////////////////////////////
@@ -75,9 +66,8 @@ static void service_FlexCAN(const uint32_t what)
     if      (what <  3) { } // Errors etc
     else if (what < 19)     // Box 0 - 15
     {
-        // Ignore message if a form or CRC error is detected or if the interrupt came from another box
         if (!((*(volatile uint32_t*)0xFFFC0020)&0x1800) && what == 3)
-            GMLAN_Arbiter((void *)(0xFFFC0088 + ((what - 3) * 0x10)));
+            GMLAN_Arbiter( CAN_A_BOX[ what - 3 ].data );
 
         // Flag reception as captured
         // 31 - 0
@@ -103,9 +93,8 @@ void softArbiter(const uint32_t softVec)
 // Main functions
 void canSendFast(const void *data)
 {
-    uint32_t *box     = (uint32_t*)(0xFFFC0090);
-    uint8_t  *boxData = (uint8_t *)&box[2];
-    uint8_t  *locData = (uint8_t *)data;
+    uint8_t *boxData = CAN_A_BOX[ CANBOX_TX ].data;
+    const uint8_t *locData = (uint8_t *)data;
 
     // Add .3 ms ~ish
     for (uint32_t i = 0; i < 7000; i++)
@@ -114,27 +103,24 @@ void canSendFast(const void *data)
     for (uint32_t i = 0; i < 8; i++)
         *boxData++ = *locData++;
 
-    *box  |= 0x0C000000;
+    CAN_A_BOX[ CANBOX_TX ].CODE |= 0x0C;
 }
 
 void canSend(const void *data)
 {
-    uint32_t *box     = (uint32_t*)(0xFFFC0090);
-    uint8_t  *boxData = (uint8_t *)&box[2];
-    uint8_t  *locData = (uint8_t *)data;
+    uint8_t *boxData = CAN_A_BOX[ CANBOX_TX ].data;
+    const uint8_t *locData = (uint8_t *)data;
 
     waitTimerZero();
-    // while (readTimer())  ;
 
     for (uint32_t i = 0; i < 8; i++)
         *boxData++ = *locData++;
 
-    *box  |= 0x0C000000;
+    CAN_A_BOX[ CANBOX_TX ].CODE |= 0x0C;
+
     asm volatile (
         " mtspr 22, %0\n"
         : : "r" (canInterframe));
-
-    //setTimer(canInterframe);
 }
 
 #ifdef enableDebugBOX
@@ -143,22 +129,28 @@ void canSendFast_d(const void *data)
     uint32_t *box     = (uint32_t*)(0xFFFC00A0);
     uint8_t  *boxData = (uint8_t *)&box[2];
     uint8_t  *locData = (uint8_t *)data;
+
     for (uint32_t i = 0; i < 14000; i++)
         __asm volatile("nop");
+
     for (uint32_t i = 0; i < 8; i++)
         *boxData++ = *locData++;
 
     *box  |= 0x0C000000;
+
      for (uint32_t i = 0; i < 14000; i++)
         __asm volatile("nop");
 }
 void sendDebug(const uint32_t step, const uint32_t extra)
 {
     uint32_t data[2] = { step, extra };
+
     canSendFast_d(data);
 }
 void sendDebug2(const void *ptr)
-{   canSendFast_d(ptr); }
+{
+    canSendFast_d(ptr);
+}
 #endif
 
 // Read FlexCAN A settings to determine cpu frequency
@@ -333,7 +325,7 @@ static void main_Init()
 
     determineFrequency();
 
-    processorID = *(uint32_t*)0xC3F90004;
+    processorID = SIU_MIDR;
     GMLAN_Reset();
 
     asm volatile (

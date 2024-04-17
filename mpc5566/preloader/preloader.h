@@ -1,3 +1,6 @@
+#ifndef __PRELOADER_H__
+#define __PRELOADER_H__
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -35,3 +38,5 @@ void     ackTSR();
 // Configure timer register
 uint32_t readTCR();
 void     writeTCR (const uint32_t val);
+
+#endif

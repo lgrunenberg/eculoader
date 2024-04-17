@@ -1,10 +1,9 @@
+#ifndef __MAINLOADER_H__
+#define __MAINLOADER_H__
+
+#include <stdio.h>
 #include <stdint.h>
 #include "../../shared/gmlan.h"
-
-#define localID     0x7e8
-#define hostID      0x7e0
-#define broadcastID 0x101
-#define debugID     0x111
 
 ///////////////////////////////////////////
 ///////////////////////////////////////////
@@ -28,3 +27,5 @@ void     configureTBL();
 void     waitTimerZero();
 void     setTimer       (const uint32_t val);
 uint8_t __attribute__ ((noinline)) ReadData(uint32_t ptr);
+
+#endif

@@ -3,14 +3,16 @@
 // Configure most of the hardware except FlexCAN.
 // Help out with interrupts, recover from ECC exceptions etc.
 // Extract the main image.
+
 #include "preloader.h"
+#include "mpc55xx.h"
+#include "../config.h"
 
 // Os f*cks with or / and during while operations of volatile memory
 #pragma GCC push_options
 #pragma GCC optimize ("O1")
 
-#define tablebase 0x40000000
-#define mainbase  0x4000C000
+
 
 //////////////////////////////////////////////////////
 // TODO:
@@ -363,7 +365,7 @@ void __attribute__((noreturn)) loaderEntry()
         mainloop();
 
     // Trigger system reset
-    *(volatile uint32_t*)0xC3F90010 = 0x80000000;
+    SIU_SRCR = 0x80000000;
     while (1)  ;
 }
 
