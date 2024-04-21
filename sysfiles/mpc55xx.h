@@ -14,6 +14,24 @@
 #define FLEXCAN_C_BASE   ( 0xFFFC8000 )
 #define FLEXCAN_D_BASE   ( 0xFFFCC000 )
 
+#define INTC_BASE        ( 0xFFF48000 )
+
+///////////////////////////////////////////////////////////////////////////////////////
+// SPR registers
+
+// Timer control registers
+#define SPR_TCR    (  340 )
+
+#define SPR_DEC    (   22 )
+
+///////////////////////////////////////////////////////////////////////////////////////
+// INTC
+
+#define INTC_MCR         (*(volatile uint32_t *)     ( INTC_BASE + 0x0000 ))
+
+#define INTC_CPR         (*(volatile uint32_t *)     ( INTC_BASE + 0x0008 ))
+
+#define INTC_EOIR        (*(volatile uint32_t *)     ( INTC_BASE + 0x0018 ))
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // SIU
@@ -24,6 +42,14 @@
 //  System reset control register
 #define SIU_SRCR         (*(volatile uint32_t *)     ( SIU_BASE + 0x0010 ))
 
+// GPIO pad configuration
+#define SIU_PCR0         ( (volatile uint16_t *)     ( SIU_BASE + 0x0040 ))
+
+// GPIO out
+#define SIU_GPDO         ( (volatile uint8_t  *)     ( SIU_BASE + 0x0600 ))
+
+// GPIO in
+#define SIU_GPDI         ( (volatile uint8_t  *)     ( SIU_BASE + 0x0800 ))
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // FlexCAN
@@ -333,11 +359,13 @@ typedef struct {
     } BIUAPR;
 } flashregs_t;
 
-#define MCR_EHV_MSK         ( 1UL << 0 )
-#define MCR_ERS_MSK         ( 1UL << 2 )
-#define MCR_PGM_MSK         ( 1UL << 4 )
+#define FLASH_MCR_EHV_MSK   ( 1UL <<  0 )
+#define FLASH_MCR_ERS_MSK   ( 1UL <<  2 )
+#define FLASH_MCR_PGM_MSK   ( 1UL <<  4 )
+
+#define FLASH_MCR_RWE_MSK   ( 1UL << 14 )
+#define FLASH_MCR_EER_MSK   ( 1UL << 15 )
 
 #define FLASHREGS           (*(flashregs_t*)         ( FLASH_BASE + 0x0000 ))
-
 
 #endif

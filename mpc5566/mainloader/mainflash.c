@@ -30,7 +30,7 @@ uint32_t FLASH_Format(const uint32_t mask)
 #ifdef disableflash
     return 1;
 #else
-    volatile uint32_t *FLASH_LMLR = (uint32_t *)0xC3F88004;
+    volatile uint32_t *FLASH_LMLR = (uint32_t *)&FLASHREGS.LMLR.direct;
     volatile uint32_t *interAddr  = (uint32_t *)0;
     uint32_t status, tries  = 50;
     uint32_t lockmask = ~mask;
@@ -55,12 +55,12 @@ uint32_t FLASH_Format(const uint32_t mask)
 
     do
     {
-        FLASHREGS.MCR.direct |= MCR_ERS_MSK;
+        FLASHREGS.MCR.direct |= FLASH_MCR_ERS_MSK;
 
         // Erase interlock write
         *interAddr = 0;
 
-        FLASHREGS.MCR.direct |= MCR_EHV_MSK;
+        FLASHREGS.MCR.direct |= FLASH_MCR_EHV_MSK;
 
         // Wait for it to terminate
         while ( !FLASHREGS.MCR.fields.DONE )  ;
@@ -70,8 +70,8 @@ uint32_t FLASH_Format(const uint32_t mask)
         // Check if PEG is one (ie good)
         status = ( FLASHREGS.MCR.fields.PEG ) ? 1 : 2;
 
-        FLASHREGS.MCR.direct &= ~MCR_EHV_MSK;
-        FLASHREGS.MCR.direct &= ~MCR_ERS_MSK;
+        FLASHREGS.MCR.direct &= ~FLASH_MCR_EHV_MSK;
+        FLASHREGS.MCR.direct &= ~FLASH_MCR_ERS_MSK;
 
     } while (tries-- && status != 1);
 
@@ -94,14 +94,14 @@ uint32_t FLASH_Write(const uint32_t addr, const uint32_t len, const void *buffer
 #endif
 
     // Set PGM
-    FLASHREGS.MCR.direct |= MCR_PGM_MSK;
+    FLASHREGS.MCR.direct |= FLASH_MCR_PGM_MSK;
 
     while ( tempLen && tries )
     {
         flPtr[0] = bfPtr[0]; // Interlock-write
         flPtr[1] = bfPtr[1]; // Consecutive write
 
-        FLASHREGS.MCR.direct |= MCR_EHV_MSK;
+        FLASHREGS.MCR.direct |= FLASH_MCR_EHV_MSK;
 
         // Wait for it to terminate
         while ( !FLASHREGS.MCR.fields.DONE )  ;
@@ -118,10 +118,10 @@ uint32_t FLASH_Write(const uint32_t addr, const uint32_t len, const void *buffer
             tries--;
         }
 
-        FLASHREGS.MCR.direct &= ~MCR_EHV_MSK;
+        FLASHREGS.MCR.direct &= ~FLASH_MCR_EHV_MSK;
     }
 
-    FLASHREGS.MCR.direct &= ~MCR_PGM_MSK;
+    FLASHREGS.MCR.direct &= ~FLASH_MCR_PGM_MSK;
 
     return tries ? 0 : 1;
 #endif

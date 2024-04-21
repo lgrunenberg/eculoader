@@ -66,12 +66,14 @@ static void service_FlexCAN(const uint32_t what)
     if      (what <  3) { } // Errors etc
     else if (what < 19)     // Box 0 - 15
     {
-        if (!((*(volatile uint32_t*)0xFFFC0020)&0x1800) && what == 3)
+        // Ignore message if crc or frame error is set.
+        // Bits are automatically cleared by a read
+        if ((CAN_A.ESR.direct & 0x1800) == 0 && what == 3)
             GMLAN_Arbiter( CAN_A_BOX[ what - 3 ].data );
 
         // Flag reception as captured
         // 31 - 0
-        *(volatile uint32_t *) 0xFFFC0030 |= 1 << (what - 3);
+        CAN_A.IFRL |= 1 << (what - 3);
     }
 }
 
@@ -84,7 +86,8 @@ void softArbiter(const uint32_t softVec)
         service_FlexCAN(softVec - 152);
 
     __asm volatile ("sync\n wrteei 0");
-    *(volatile uint32_t *) 0xFFF48018 = 0;
+
+    INTC_EOIR = 0;
 }
 
 /////////////////////////////////////////////////////////////////
@@ -118,9 +121,7 @@ void canSend(const void *data)
 
     CAN_A_BOX[ CANBOX_TX ].CODE |= 0x0C;
 
-    asm volatile (
-        " mtspr 22, %0\n"
-        : : "r" (canInterframe));
+    writeSPR(SPR_DEC, canInterframe);
 }
 
 #ifdef enableDebugBOX
@@ -311,7 +312,6 @@ static void main_Init()
 #endif
 
     // The linker script is already offset-ing the address so there's no need to subtract one from the target
-    // and yeah, 64k bss is more than enough so I'm not even loading the high part
     asm volatile (
         " li      %%r3,       bss_size@l \n"
         " mtctr   %%r3                   \n"
@@ -326,12 +326,10 @@ static void main_Init()
     determineFrequency();
 
     processorID = SIU_MIDR;
+
     GMLAN_Reset();
 
-    asm volatile (
-        " li  %%r3, %0   \n"
-        " mtspr 22, %%r3 \n"
-        : : "n" (100) : "r3");
+    writeSPR(SPR_DEC, 100);
 
     configureFlexCAN();
     configureTBL();
@@ -345,11 +343,8 @@ void mainloop()
 
     GMLAN_MainLoop();
 
-    asm volatile (
-        " lis  %%r3, %0@h       \n"
-        " addi %%r3, %%r3, %0@l \n"
-        " mtspr 22, %%r3        \n"
-        : : "n" (24000000) : "r3");
+    writeSPR(SPR_DEC, 24000000);
+
     waitTimerZero();
 }
 

@@ -12,7 +12,16 @@
 #pragma GCC push_options
 #pragma GCC optimize ("O1")
 
+typedef struct {
+    uint32_t *ptr;
+    uint32_t data;
+} runInit_t;
 
+typedef struct {
+    const uint32_t checksum;
+    const uint32_t sizeIn;
+    const uint8_t  data[];
+} lzImage_t;
 
 //////////////////////////////////////////////////////
 // TODO:
@@ -66,8 +75,6 @@ static void m_sendDebug(const uint32_t step, const uint32_t extra)
 // Figure out who called and why
 uint32_t hardArbiter(const uint32_t hardVec)
 {
-    volatile uint32_t *FLASH_MCR = (uint32_t *)0xC3F88000;
-
     switch (hardVec)
     {
 
@@ -78,14 +85,14 @@ uint32_t hardArbiter(const uint32_t hardVec)
     case 0x30:
 
         // FLASH ECC error
-        if (*FLASH_MCR & 0x8000) {
-            *FLASH_MCR |= 0x8000;
+        if (FLASHREGS.MCR.direct & FLASH_MCR_EER_MSK) {
+            FLASHREGS.MCR.direct |= FLASH_MCR_EER_MSK;
             return 1;
         }
 
         // Read while write error
-        else if (*FLASH_MCR & 0x4000)
-            *FLASH_MCR |= 0x4000;
+        else if (FLASHREGS.MCR.direct & FLASH_MCR_RWE_MSK)
+            FLASHREGS.MCR.direct |= FLASH_MCR_RWE_MSK;
 
 #ifdef enableDebugBOX
         // Something else caused this interrupt, oh sh!t
@@ -108,11 +115,10 @@ uint32_t hardArbiter(const uint32_t hardVec)
 #ifndef BAMMODE
         if (modeWord == MODE_E39)
         {
-            volatile uint8_t *gpd4 = (uint8_t *)0xC3F90604;
-            *gpd4 = 0;
+            SIU_GPDO[ 4 ] = 0;
             for (uint32_t i = 0; i < 32; i++)
                 __asm volatile ("nop");
-            *gpd4 = 1;
+            SIU_GPDO[ 4 ] = 1;
         }
         else if (modeWord == MODE_E78)
         {
@@ -158,12 +164,6 @@ static void setupIntTable()
     }
 }
 
-
-typedef struct {
-    uint32_t *ptr;
-    uint32_t data;
-} runInit_t;
-
 static const runInit_t runInit[] = {
     // FlexCAN
 //  { (uint32_t *)0xFFFC0000, 0x80000000 }, // A
@@ -206,8 +206,6 @@ static const runInit_t runInit[] = {
     { (uint32_t *)0xFFF80068, 0x00000000 },
 };
 
-
-
 // Disable a little bit of everything..
 static void disable_Internal()
 {
@@ -237,15 +235,16 @@ static void disable_Internal()
     {
         // Pad configuration 4
         if (modeWord == MODE_E39 || modeWord == MODE_E39A)
-            *(volatile uint16_t *)0xC3F90048 = 0x203;
+            SIU_PCR0[ 4 ] = 0x203;
 
         // e39a is only seen setting this to 1. It's never touched after
         if (modeWord == MODE_E39A)
-            *(volatile uint8_t *)0xC3F90604 = 1;
+            SIU_GPDO[ 4 ] = 1;
 
         // Turn off since it's not used on this platform
         *(volatile uint32_t *)0xFFF9C000 = 0x4000; // DSPI D
     }
+
     // eSCI
     // Not even present in the firmware from what I could find..
     // *(uint16_t *) 0xFFFB0004 |= 0x8000;
@@ -256,7 +255,7 @@ static void disable_Internal()
 #endif
 
     // Let level 1 - 15 interrupt
-    *(volatile uint32_t*)0xFFF48008 =  0;
+    INTC_CPR = 0;
 }
 
 // Set up most of the hardware, enable interrupts
@@ -265,11 +264,13 @@ static void configure_Internal()
     // Set up ASAP!
     // Main loader has not been extracted and is _NOT_ fit to receive external interrupts
     mainReady = 0;
+
     disable_Internal();
+
     setupIntTable();
 
     // Force software vectored mode
-    *(volatile uint32_t *)0xFFF48000 &= ~1;
+    INTC_MCR &= ~1;
 
     // Use new table
     rebaseInterrupt(tablebase);
@@ -280,9 +281,9 @@ static void configure_Internal()
     // FPEXT: 16:13 Fixed-interval extension
 
     uint32_t TCR;
-    asm volatile (
-        "mfspr  %0, 340"
-        : "=r" (TCR) );
+
+    readSPR(SPR_TCR, TCR);
+
     TCR &= 0x301E000;
 
 #ifdef BAMMODE
@@ -293,9 +294,7 @@ static void configure_Internal()
     TCR |= (44&3) << 24 | 1 << 23 | ((44>>2)&15) << 13;
 #endif
 
-    asm volatile (
-        "mtspr  340, %0"
-        : : "r" (TCR) );
+    writeSPR(SPR_TCR, TCR);
 
     enableEE();
 
@@ -306,11 +305,12 @@ static void configure_Internal()
 }
 
 // Extract the main loader image
-static uint32_t mainExtract(const uint8_t *in, uint8_t *out)
+static uint32_t mainExtract(const lzImage_t *img, uint8_t *out)
 {
-    uint32_t chksum = *(uint32_t*)&in[0];
-    uint32_t insize = *(uint32_t*)&in[4];
+    uint32_t chksum = img->checksum;
+    uint32_t insize = img->sizeIn;
     uint32_t outpos = 0, inpos = 0;
+    const uint8_t *in = (uint8_t*)img;
 
     if (insize < (( 4 * 1024) + 8) || // The image should never be smaller than 4K
         insize > ((14 * 1024) + 8)  ) // The image should never be bigger than 16K
@@ -321,6 +321,7 @@ static uint32_t mainExtract(const uint8_t *in, uint8_t *out)
 
     if (chksum)
         return 2;
+
 
     in     += 8;
     insize -= 8;
@@ -361,7 +362,7 @@ void __attribute__((noreturn)) loaderEntry()
     configure_Internal();
 
     // Extract main image and jump there
-    if (!mainExtract(mainloader,(uint8_t *)mainbase))
+    if (!mainExtract((lzImage_t*)mainloader,(uint8_t *)mainbase))
         mainloop();
 
     // Trigger system reset
