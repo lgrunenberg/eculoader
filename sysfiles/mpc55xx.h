@@ -3,6 +3,10 @@
 #ifndef __MPC55XX_H__
 #define __MPC55XX_H__
 
+#include "powerpc.h"
+
+#define FLASH_BASE       ( 0xC3F88000 )
+
 #define SIU_BASE         ( 0xC3F90000 )
 
 #define FLEXCAN_A_BASE   ( 0xFFFC0000 )
@@ -157,6 +161,7 @@ typedef struct {
     union {
         canid_std_t STD;
         canid_ext_t EXT;
+        uint32_t direct;
     } ID;
 
     uint8_t data[8];
@@ -173,5 +178,166 @@ typedef struct {
 
 #define CAN_D           (*(flexcan_t*)         ( FLEXCAN_D_BASE + 0x0000 ))
 #define CAN_D_BOX       ((canbox_t*)           ( FLEXCAN_D_BASE + 0x0080 ))
+
+///////////////////////////////////////////////////////////////////////////////////////
+// Flash
+
+typedef struct {
+             uint32_t pad_0_3   :  4;        //  0:3
+    volatile uint32_t SIZE      :  4;        //  4:7
+             uint32_t pad_8     :  1;        //  8
+    volatile uint32_t LAS       :  3;        //  9:11
+             uint32_t pad_12_14 :  3;        // 12:14
+    volatile uint32_t MAS       :  1;        // 15
+
+    volatile uint32_t EER       :  1;        // 
+    volatile uint32_t RWE       :  1;        // 
+             uint32_t pad_18_19 :  2;        // 
+    volatile uint32_t PEAS      :  1;        // 
+    volatile uint32_t DONE      :  1;        // 
+    volatile uint32_t PEG       :  1;        // 
+             uint32_t pad_23_24 :  2;        // 
+    volatile uint32_t STOP      :  1;        // 
+             uint32_t pad_26    :  1;        // 
+    volatile uint32_t PGM       :  1;        // 
+    volatile uint32_t PSUS      :  1;        // 
+    volatile uint32_t ERS       :  1;        // 
+    volatile uint32_t ESUS      :  1;        // 
+    volatile uint32_t EHV       :  1;        // 
+} flash_mcr_t;
+
+// Low/Mid Address Space Block Locking Register
+typedef struct {
+    volatile uint32_t LME       :  1;        //  0
+             uint32_t pad_1_10  : 10;        //  1:10
+    volatile uint32_t SLOCK     :  1;        // 11
+             uint32_t pad_12_13 :  2;        // 12:13
+    volatile uint32_t MLOCK     :  2;        // 14:15
+             uint32_t pad_16_25 : 10;        // 16:25
+    volatile uint32_t LLOCK     :  6;        // 26:31
+} flash_lmlr_t;
+
+// High Address Space Block Locking Register
+typedef struct {
+    volatile uint32_t HBE       :  1;        //  0
+             uint32_t pad_1_11  : 11;        //  1:11
+    volatile uint32_t HLOCK     : 20;        // 12:31
+} flash_hlr_t;
+
+// Secondary Low/Mid Address Space Block Locking Register
+typedef struct {
+    volatile uint32_t SLE       :  1;        //  0
+             uint32_t pad_1_10  : 10;        //  1:10
+    volatile uint32_t SSLOCK    :  1;        // 11
+             uint32_t pad_12_13 :  2;        // 12:13
+    volatile uint32_t SMLOCK    :  2;        // 14:15
+             uint32_t pad_16_25 : 10;        // 16:25
+    volatile uint32_t SLLOCK    :  6;        // 26:31
+} flash_slmlr_t;
+
+// Low/Mid Address Space Block Select Register
+typedef struct {
+             uint32_t pad_0_13  : 14;        //  0:13
+    volatile uint32_t MSEL      :  2;        // 14:15
+             uint32_t pad_16_25 : 10;        // 16:25
+    volatile uint32_t LSEL      :  6;        // 26:31
+} flash_lmsr_t;
+
+// High Address Space Block Select Register
+typedef struct {
+             uint32_t pad_0_13  : 12;        //  0:11
+    volatile uint32_t LSEL      : 20;        // 12:31
+} flash_hsr_t;
+
+// Address Register
+typedef struct {
+             uint32_t pad_0_9   : 10;        //  0:9
+    volatile uint32_t ADDR      : 19;        // 10:28
+             uint32_t pad_29_31 :  3;        // 29:31
+} flash_ar_t;
+
+// Flash Bus Interface Unit Control Register
+typedef struct {
+             uint32_t pad_0_10  : 11;        //  0:10
+    volatile uint32_t M4PFE     :  1;        // 11
+    volatile uint32_t M3PFE     :  1;        // 12
+    volatile uint32_t M2PFE     :  1;        // 13
+    volatile uint32_t M1PFE     :  1;        // 14
+    volatile uint32_t M0PFE     :  1;        // 15
+
+    volatile uint32_t APC       :  3;        // 16:18
+    volatile uint32_t WWSC      :  2;        // 19:20
+    volatile uint32_t RWSC      :  3;        // 21:23
+    volatile uint32_t DPFEN     :  2;        // 24:25
+    volatile uint32_t IPFEN     :  2;        // 26:27
+    volatile uint32_t PFLIM     :  3;        // 28:30
+    volatile uint32_t BFEN      :  1;        // 31
+} flash_biucr_t;
+
+// Flash Bus Interface Unit Control Register
+typedef struct {
+             uint32_t pad_0_21  : 22;        //  0:21
+    volatile uint32_t M4AP      :  2;        // 22:23
+    volatile uint32_t M3AP      :  2;        // 24:25
+    volatile uint32_t M2AP      :  2;        // 26:27
+    volatile uint32_t M1AP      :  2;        // 28:29
+    volatile uint32_t M0AP      :  2;        // 30:31
+} flash_biuapr_t;
+
+
+typedef struct {
+    // 0x0000
+    union {
+        flash_mcr_t       fields;
+        volatile uint32_t direct;
+    } MCR;
+    // 0x0004
+    union {
+        flash_lmlr_t      fields;
+        volatile uint32_t direct;
+    } LMLR;
+    // 0x0008
+    union {
+        flash_hlr_t       fields;
+        volatile uint32_t direct;
+    } HLR;
+    // 0x000C
+    union {
+        flash_slmlr_t     fields;
+        volatile uint32_t direct;
+    } SLMLR;
+    // 0x0010
+    union {
+        flash_lmsr_t      fields;
+        volatile uint32_t direct;
+    } LMSR;
+    // 0x0014
+    union {
+        flash_hsr_t       fields;
+        volatile uint32_t direct;
+    } HSR;
+    // 0x0018
+    union {
+        flash_ar_t        fields;
+        volatile uint32_t direct;
+    } AR;
+    // 0x001C
+    union {
+        flash_biucr_t     fields;
+        volatile uint32_t direct;
+    } BIUCR;
+    // 0x0020
+    union {
+        flash_biuapr_t    fields;
+        volatile uint32_t direct;
+    } BIUAPR;
+} flashregs_t;
+
+#define MCR_EHV_MSK         ( 1UL << 0 )
+#define MCR_ERS_MSK         ( 1UL << 2 )
+#define MCR_PGM_MSK         ( 1UL << 4 )
+
+#define FLASHREGS           (*(flashregs_t*)         ( FLASH_BASE + 0x0000 ))
+
 
 #endif

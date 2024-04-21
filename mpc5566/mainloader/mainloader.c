@@ -189,7 +189,7 @@ static void determineFrequency()
 static void configureFlash()
 {
     // Disable prefetch, set up delays etc
-    *(volatile uint32_t*)0xC3F8801C = (
+    *(volatile uint32_t*)&FLASHREGS.BIUCR.direct = (
         // Sane values according to the datasheet
         2 << 13 | // APC
         1 << 11 | // WWSC
@@ -197,9 +197,9 @@ static void configureFlash()
     );
 
     // Lock out eDMA, EBI, FEC
-    *(volatile uint32_t*)0xC3F88020 = 0xF;
+    *(volatile uint32_t*)&FLASHREGS.BIUAPR.direct = 0xF;
 
-    volatile uint32_t *FLASH_LMLR = (volatile uint32_t *)0xC3F88004;
+    volatile uint32_t *FLASH_LMLR = &FLASHREGS.LMLR.direct;
 
     // Low partitions
     if (!(*FLASH_LMLR & 0x80000000)) // Unlock access
@@ -223,8 +223,8 @@ static void configureFlash()
 
 static uint32_t configureFlexCAN()
 {
-    volatile uint32_t *CANa_MCR = (volatile uint32_t *)0xFFFC0000;
-             uint32_t *CANa_MB0 = (         uint32_t *)0xFFFC0080;
+    volatile uint32_t *CANa_MCR = (uint32_t *)&CAN_A.MCR.direct;
+             uint32_t *CANa_MB0 = (uint32_t *)CAN_A_BOX;
              uint32_t *tmp      = CANa_MB0;
 
 #ifdef BAMMODE
@@ -338,61 +338,12 @@ static void main_Init()
     configureFlash();
 }
 
-
-
-
-
-
-/*
-DSPIx_MCR == mcr reg
-
-
-
-
-
-
-
-*(volatile uint32_t *)0xFFF90000 = 0x4000; // DSPI A
-
-static void broadcast_e78SPIWatchdog()
-{
-    static   uint16_t dArr[]       = { 0x542C, 0, 0 };
-    volatile uint32_t *DSPId_sr    = (volatile uint32_t *)0xFFF9C02C;
-    volatile uint32_t *DSPId_PUSHR = (volatile uint32_t *)0xFFF9C034;
-    // volatile uint32_t *DSPId_POPR  = (volatile uint32_t *)0xFFF9C038;
-    *dArr ^= 0x3E00; // Notice static!
-
-    for (uint32_t i = 0; i < 3; i++)
-    {
-        *DSPId_sr |= 0x80000000;
-        uint32_t data = 0x90010000 | dArr[i]; // CONT, CTAR1, CS0
-
-        if (i == 2)
-            data &= 0x3FFFFF;
-
-        *DSPId_PUSHR = data;
-        while (! ((*DSPId_sr) & 0x80000000) )   ;
-    }
-}
-*/
-
-
-
-
-
 void mainloop()
 {
     main_Init();
     mainReady = 1;
 
-    // setTimer(24000000);
-    // while (readTimer())  ;
-    // sendDebug(1,10);
-
     GMLAN_MainLoop();
-
-    // setTimer(24000000);
-    // while (readTimer())  ;
 
     asm volatile (
         " lis  %%r3, %0@h       \n"

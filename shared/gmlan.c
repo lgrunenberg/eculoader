@@ -40,7 +40,14 @@ extern uint8_t __attribute__ ((noinline)) ReadData(uint32_t ptr);
 /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////
-// Volatile parameters
+// Global parameters
+
+uint32_t canInterframe;
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+// Static parameters
 
 // What's up doc?
 static volatile uint32_t wrkMask = 0;
@@ -390,6 +397,7 @@ static void GMLAN_RdMemByAddr()
     {
         uint16_t CSUM16 = 0;
         uint8_t *rptr = (uint8_t*)&resp[6];
+
         resp[0] = opLength + 7; // Take header and checksum into account
         resp[2] = (opAddress >> 24);
         resp[3] = (opAddress >> 16);
@@ -402,6 +410,7 @@ static void GMLAN_RdMemByAddr()
             CSUM16 += tdat;
             *rptr++ = tdat;
         }
+
         *rptr++ = (CSUM16>>8)&0xFF;
         *rptr++ = CSUM16&0xFF;
     }
@@ -412,9 +421,11 @@ static void GMLAN_RdMemByAddr()
 static void GMLAN_HashMD5()
 {
     uint8_t resp[3];
+
     resp[0] = 2;
     resp[1] = StartRoutineByIdentifier + 0x40;
     resp[2] = 0;
+
     canSendFast(resp);
 
     md5Hash = hashMD5(opAddress, opLength);
@@ -424,9 +435,11 @@ static void GMLAN_HashMD5()
 static void GMLAN_Format()
 {
     uint8_t resp[3];
+
     resp[0] = 2;
     resp[1] = StartRoutineByIdentifier + 0x40;
     resp[2] = 1;
+
     canSendFast(resp);
 
     formatHas = FLASH_Format(opMask);
@@ -435,7 +448,9 @@ static void GMLAN_Format()
 static void GMLAN_TransferData()
 {
     if (FLASH_Write(opAddress, opLength, tempBuf))
+    {
         GMLAN_SendFail(TransferData, GeneralProgrammingFailure);
+    }
     else
     {
         uint8_t resp[2] = { 1, TransferData + 0x40 };
@@ -495,8 +510,7 @@ void GMLAN_MainLoop()
     while(keepAlive)
     {
 #ifdef enableBroadcast
-        uint32_t passedTime = msTimer - oldTime;
-        if (passedTime >= 2000)
+        if ((msTimer - oldTime) >= 2000)
         {
             oldTime = msTimer;
             broadcastMessage();
@@ -633,28 +647,29 @@ static void REQ_RdDataByID(const uint8_t *ptr)
 static void REQ_WrDataByID(const uint8_t *ptr)
 {
     if (*ptr < 3)
-        GMLAN_SendFail(ptr[1], SubFuncNotSupInvForm);
-    else
     {
-        switch (ptr[2])
-        {
-            // Inter-frame delay (04 3B 91 nn nn)
-            case 0x91:
-                if (*ptr != 4)
-                {
-                    GMLAN_SendFail(ptr[1], SubFuncNotSupInvForm);
-                    return;
-                }
+        GMLAN_SendFail(ptr[1], SubFuncNotSupInvForm);
+        return;
+    }
 
-                canInterframe = (ptr[3] << 8 | ptr[4]) * (clockFreq / 1000000);
-                uint32_t tmp[1] = { 0x027B9100 };
-                canSendFast(tmp);
-                return;
-
-            default:
+    switch (ptr[2])
+    {
+        // Inter-frame delay (04 3B 91 nn nn)
+        case 0x91:
+            if (*ptr != 4)
+            {
                 GMLAN_SendFail(ptr[1], SubFuncNotSupInvForm);
                 return;
-        }
+            }
+
+            canInterframe = (ptr[3] << 8 | ptr[4]) * (clockFreq / 1000000);
+            uint32_t tmp[1] = { 0x027B9100 };
+            canSendFast(tmp);
+            return;
+
+        default:
+            GMLAN_SendFail(ptr[1], SubFuncNotSupInvForm);
+            return;
     }
 }
 

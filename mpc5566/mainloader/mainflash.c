@@ -1,6 +1,7 @@
 //////////////////////////////
 // Flash routines for MPC5566
 #include "mainloader.h"
+#include "mpc55xx.h"
 
 // Sensitive code. -Os is known from testing to f*ck this up
 #pragma GCC push_options
@@ -29,7 +30,6 @@ uint32_t FLASH_Format(const uint32_t mask)
 #ifdef disableflash
     return 1;
 #else
-    volatile uint32_t *FLASH_MCR  = (uint32_t *)0xC3F88000;
     volatile uint32_t *FLASH_LMLR = (uint32_t *)0xC3F88004;
     volatile uint32_t *interAddr  = (uint32_t *)0;
     uint32_t status, tries  = 50;
@@ -55,25 +55,23 @@ uint32_t FLASH_Format(const uint32_t mask)
 
     do
     {
-        // Set ERS
-        *FLASH_MCR |= 4;
+        FLASHREGS.MCR.direct |= MCR_ERS_MSK;
 
         // Erase interlock write
         *interAddr = 0;
 
-        // Set EHV
-        *FLASH_MCR |= 1;
+        FLASHREGS.MCR.direct |= MCR_EHV_MSK;
 
         // Wait for it to terminate
-        while (!(*FLASH_MCR & 0x400))  ;
+        while ( !FLASHREGS.MCR.fields.DONE )  ;
         
         asm volatile("sync\n isync\n");
 
         // Check if PEG is one (ie good)
-        status = (*FLASH_MCR & 0x200) ? 1 : 2;
+        status = ( FLASHREGS.MCR.fields.PEG ) ? 1 : 2;
 
-        *FLASH_MCR &= ~1; // Negate EHV
-        *FLASH_MCR &= ~4; // Negate ERS
+        FLASHREGS.MCR.direct &= ~MCR_EHV_MSK;
+        FLASHREGS.MCR.direct &= ~MCR_ERS_MSK;
 
     } while (tries-- && status != 1);
 
@@ -85,8 +83,7 @@ uint32_t FLASH_Write(const uint32_t addr, const uint32_t len, const void *buffer
 {
 #ifdef disableflash
     return 0;
-#else
-    volatile uint32_t *FLASH_MCR  = (uint32_t *)0xC3F88000;    
+#else  
     volatile uint32_t *flPtr = (uint32_t*)addr;
     volatile uint32_t *bfPtr = (uint32_t*)buffer;
     uint32_t tempLen = len / 8;
@@ -97,20 +94,19 @@ uint32_t FLASH_Write(const uint32_t addr, const uint32_t len, const void *buffer
 #endif
 
     // Set PGM
-    *FLASH_MCR |= 0x10;
+    FLASHREGS.MCR.direct |= MCR_PGM_MSK;
 
-    while (tempLen && tries)
+    while ( tempLen && tries )
     {
         flPtr[0] = bfPtr[0]; // Interlock-write
         flPtr[1] = bfPtr[1]; // Consecutive write
 
-        // Set EHV
-        *FLASH_MCR |= 1;
+        FLASHREGS.MCR.direct |= MCR_EHV_MSK;
 
         // Wait for it to terminate
-        while (!(*FLASH_MCR & 0x400))  ;
+        while ( !FLASHREGS.MCR.fields.DONE )  ;
 
-        if ((*FLASH_MCR & 0x200))
+        if ( FLASHREGS.MCR.fields.PEG )
         {
             tries  = 50;
             flPtr += 2;
@@ -118,14 +114,14 @@ uint32_t FLASH_Write(const uint32_t addr, const uint32_t len, const void *buffer
             tempLen--;
         }
         else
+        {
             tries--;
+        }
 
-        // Negate EHV
-        *FLASH_MCR &= ~1;
+        FLASHREGS.MCR.direct &= ~MCR_EHV_MSK;
     }
 
-    // Negate PGM
-    *FLASH_MCR &= ~0x10;
+    FLASHREGS.MCR.direct &= ~MCR_PGM_MSK;
 
     return tries ? 0 : 1;
 #endif

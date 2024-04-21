@@ -41,6 +41,11 @@ configureTBL:
 # mas4: 628
 # mas6: 630
 
+# MMUCSR0:  1012
+# MMUCFG :  1015
+# TLB0CFG:   688
+# TLB1CFG:   689
+
 MMU_InitL:
     lwzu      %r4, 4(%r3)
     mtspr     624, %r4

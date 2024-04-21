@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdint.h>
 
 /////////////////////////////////////////////////////////////////
@@ -41,7 +42,7 @@ extern volatile uint32_t msTimer;
 extern void broadcastMessage();
 #endif
 
-volatile uint32_t canInterframe;
+extern uint32_t canInterframe;
 
 void GMLAN_Reset();
 void GMLAN_MainLoop();
