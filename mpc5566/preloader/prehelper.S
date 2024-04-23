@@ -13,6 +13,10 @@
 .global ackTSR
 
 # # # # # # # # # # # # # # # # # # # #
+# ECC initialisation of SRAM
+.global initECC_hi
+
+# # # # # # # # # # # # # # # # # # # #
 # "External" interrupts
 enableEE:
     mfmsr %r3
@@ -118,8 +122,8 @@ rebaseInterrupt:
     li          %r3, 0xA0
     mtspr     0x198, %r3 /* ivor 8, System Call (sc) instruction used */
 
-#   li          %r3, 0xB0
-#   mtspr     0x199, %r3 /* ivor 9, AP unavailable. (Not present in this processor core) */
+    li          %r3, 0xB0
+    mtspr     0x199, %r3 /* ivor 9, AP unavailable. (Not present in this processor core) */
 
     li          %r3, 0xC0
     mtspr     0x19A, %r3 /* ivor 10, Decrementer */
@@ -133,21 +137,21 @@ rebaseInterrupt:
     li          %r3, 0xF0
     mtspr     0x19D, %r3 /* ivor 13, Data TLB error */
 
-    li          %r3, 0x00
+    li          %r3, 0x100
     mtspr     0x19E, %r3 /* ivor 14, Instruction TLB error */
 
-    li          %r3, 0x10
+    li          %r3, 0x110
     mtspr     0x19F, %r3 /* ivor 15, Debug */
 
 # ...
 
-    li          %r3, 0x20
+    li          %r3, 0x120
     mtspr     0x210, %r3 /* ivor 32, SPE instructions forbidden in this mode */
 
-    li          %r3, 0x30
+    li          %r3, 0x130
     mtspr     0x211, %r3 /* ivor 33, SPE floating point _DATA_ exception */
 
-    li          %r3, 0x40
+    li          %r3, 0x140
     mtspr     0x212, %r3 /* ivor 34, SPE floating point rounding error */
 
     sync
@@ -160,6 +164,37 @@ rebaseInterrupt:
 ReadDataFail:
     li  %r3, 0xFF
 blr
+
+# # # # # # # # # # # # # # # # # # # #
+# SRAM has HW ecc so it must be written to in a particular way to initialise things properly
+# - Main firmare is known not to do all of it (since it's not using everything) so we go kinda overboard to make properly sure
+initECC_hi:
+    stwu    %sp,-16(%sp)
+    stmw   %r30,  8(%sp)
+
+    li     %r30, 0
+    li     %r31, 0
+
+    lis     %r3, __e_loader@h
+    ori     %r3, %r3, __e_loader@l
+    lis     %r4, 0x4002        /* end at 4002_0000 */
+
+    # Watchdog bit
+    lis     %r5, 0x4000
+
+ECCinitHi:
+    # Service watchdog
+    mtspr   336, %r5
+
+    stmw   %r30, 0(%r3)
+    addi    %r3, %r3, 8
+    cmpw    %r4, %r3
+    bne    ECCinitHi
+
+    lmw   %r30,   8(%sp)
+    addi   %sp, %sp, 16
+blr
+
 
 .section .rodata
 .align 4

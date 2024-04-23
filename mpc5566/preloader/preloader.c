@@ -23,6 +23,11 @@ typedef struct {
     const uint8_t  data[];
 } lzImage_t;
 
+
+extern uint8_t __s_mainLoader[];
+
+static uint32_t mainReady = 0;
+
 //////////////////////////////////////////////////////
 // TODO:
 // Determine if SRAM ECC exceptions are worth the hassle
@@ -151,16 +156,17 @@ uint32_t hardArbiter(const uint32_t hardVec)
 static void setupIntTable()
 {
     // Base of SRAM
-    uint32_t *ptr = (uint32_t *)tablebase;
+    uint32_t *ptr = (uint32_t*)tablebase;
 
-    // Create a stupidly large table
-    for (uint32_t i = 0; i < 256; i++) // 35
+    for (uint32_t i = 0; i < 32; i++) // ( 0 to 15 + 32 to 34 + padding to make it nice and even)
     {
-        uint32_t branch = (((uint32_t) &intEntry) - ((uint32_t) ptr)) - 12;
+        // uint32_t branch = (((uint32_t) &intEntry) - ((uint32_t) ptr)) - 12;
         *ptr++ = 0x3821FFFC;          // addi   %sp, %sp, -4  (0)
         *ptr++ = 0x90610000;          // stw    %r3, 0(%sp)   (4)
         *ptr++ = 0x38600000 | i<<4;   // li     %r3, n        (8)
-        *ptr++ = 0x48000000 | branch; // b xx                 (12)
+        *ptr   = 0x48000000 |         // b xx                 (12)
+                    (((uint32_t) &intEntry) - ((uint32_t) ptr)); 
+        ptr++;
     }
 }
 
@@ -209,9 +215,9 @@ static const runInit_t runInit[] = {
 // Disable a little bit of everything..
 static void disable_Internal()
 {
-    // No interrupts for you!
-    uint8_t *PSRn = (uint8_t *)0xFFF48040;
-    for (int i = 0; i < 330; i++)
+    // Set lowest priority for ever INTC source
+    uint8_t *PSRn = (uint8_t*)INTC_PSR;
+    for (uint32_t i = 0; i < 330; i++)
         *PSRn++ = 0;
 
 #ifndef BAMMODE
@@ -273,7 +279,7 @@ static void configure_Internal()
     INTC_MCR &= ~1;
 
     // Use new table
-    rebaseInterrupt(tablebase);
+    rebaseInterrupt((void*)tablebase);
 
     // Service watchdog(s) every 8.192 ms @ 128 MHz
     // FP:    25:24 Fixed interval timer period
@@ -296,6 +302,10 @@ static void configure_Internal()
 
     writeSPR(SPR_TCR, TCR);
 
+    // Initialise ECC and clear upper portion of SRAM
+    initECC_hi();
+
+    // Enable external ints
     enableEE();
 
 #ifdef BAMMODE
@@ -312,16 +322,13 @@ static uint32_t mainExtract(const lzImage_t *img, uint8_t *out)
     uint32_t outpos = 0, inpos = 0;
     const uint8_t *in = (uint8_t*)img;
 
-    if (insize < (( 4 * 1024) + 8) || // The image should never be smaller than 4K
-        insize > ((14 * 1024) + 8)  ) // The image should never be bigger than 16K
-        return 1;
-
     for (uint32_t i = 4; i < insize; i++)
         chksum += in[i];
 
     if (chksum)
+    {
         return 2;
-
+    }
 
     in     += 8;
     insize -= 8;
@@ -339,7 +346,7 @@ static uint32_t mainExtract(const lzImage_t *img, uint8_t *out)
 
                 inpos += 2;
 
-                for (uint32_t i = 0; i < length; i++)
+                while ( length-- )
                 {
                     out[outpos] = out[outpos - ofs];
                     outpos++;
@@ -356,17 +363,18 @@ static uint32_t mainExtract(const lzImage_t *img, uint8_t *out)
 }
 
 // Entry point of C code
-void __attribute__((noreturn)) loaderEntry() 
+void __attribute__((noreturn)) loaderEntry(const uint32_t loaderBase) 
 {
     // Set up hardware
     configure_Internal();
 
     // Extract main image and jump there
-    if (!mainExtract((lzImage_t*)mainloader,(uint8_t *)mainbase))
-        mainloop();
+    if (!mainExtract((lzImage_t*)mainloader,(uint8_t *)__s_mainLoader))
+        mainloop( &mainReady );
 
     // Trigger system reset
     SIU_SRCR = 0x80000000;
+
     while (1)  ;
 }
 

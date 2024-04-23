@@ -1,25 +1,25 @@
 ENTRY(mainloop)
 
 MEMORY {
-    ram : ORIGIN = 0x4000C000, LENGTH = 20K
+    RAM (RWX) : ORIGIN = 0x40008000, LENGTH = 20K
 }
 
 SECTIONS {
     .text : {
         *(.text) 
-    } > ram
+    } > RAM
 
     .data : {
         *(.rodata)
         *(.data)
-    } > ram
+    } > RAM
 
     .bss : {
         __s_bss = . ;
         *(.bss)
         *(COMMON)
         __e_bss = . ;
-    } > ram
+    } > RAM
 
     /* save one instruction in the code */
     bss_start = __s_bss - 1;

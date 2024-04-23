@@ -46,8 +46,8 @@ else
 TARGPROC = -mspe -mno-toc -mbig-endian
 endif
 GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC -I../sysfiles
-ASFLAGS  = $(TARGPROC) $(GLOBFLAGS) -c 
-CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -Werror -Wpedantic -std=gnu99 -c
+ASFLAGS  = $(TARGPROC) $(GLOBFLAGS)
+CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -Werror -Wpedantic -std=gnu99
 
 .PHONY: all
 
@@ -74,22 +74,22 @@ out/mainloader.ld: linkerscripts/mainloader.in
 	@$(CPP) -P $(GLOBFLAGS) $< $@
 
 out/mainloader.o : mainloader/mainloader.c
-	@$(CC) $(CFLAGS) $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 out/mainhelper.o : mainloader/mainhelper.S
-	@$(CC) $(ASFLAGS) $< -o $@
+	@$(CC) $(ASFLAGS) -c $< -o $@
 
 out/mainflash.o : mainloader/mainflash.c
-	@$(CC) $(CFLAGS) $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 out/gmlan.o : ../shared/gmlan.c
-	@$(CC) $(CFLAGS) $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 out/md5s.o : ../shared//md5ppc.S
-	@$(CC) $(ASFLAGS) $< -o $@
+	@$(CC) $(ASFLAGS) -c $< -o $@
 
 out/md5.o : ../shared//md5.c
-	@$(CC) $(CFLAGS) $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 out/mainloader.elf : mainmessage out/mainloader.ld $(MAINOBJ)
 	@$(LD) -nostdlib -Tout/mainloader.ld -o $@ $(MAINOBJ)
@@ -115,13 +115,13 @@ out/preloader.ld: linkerscripts/preloader.in
 	@$(CPP) -P $(GLOBFLAGS) $< $@
 
 out/startup.o : startup.S
-	@$(CC) $(ASFLAGS) $< -o $@
+	@$(CC) $(ASFLAGS) -c $< -o $@
 
 out/preloader.o : preloader/preloader.c
-	@$(CC) $(CFLAGS) $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 out/prehelper.o : preloader/prehelper.S
-	@$(CC) $(ASFLAGS) $< -o $@
+	@$(CC) $(ASFLAGS) -c $< -o $@
 
 # Also fetching addresses of symbols in the main binary
 out/loader.elf : premessage out/preloader.ld out/startup.o $(PREOBJ)
@@ -153,8 +153,3 @@ clean :
 	@rm -f out/*.elf
 	@rm -f out/*.bin
 	@rm -f out/*.lz
-#	@del out\*.o /q >nul 2>&1
-#	@del out\*.ld /q >nul 2>&1
-#	@del out\*.elf /q >nul 2>&1
-#	@del out\*.bin /q >nul 2>&1
-#	@del out\*.lz /q >nul 2>&1

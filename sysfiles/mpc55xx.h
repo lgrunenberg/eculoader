@@ -22,6 +22,9 @@
 // Timer control registers
 #define SPR_TCR    (  340 )
 
+// Timer status register
+#define SPR_TSR    (  336 )
+
 #define SPR_DEC    (   22 )
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +35,10 @@
 #define INTC_CPR         (*(volatile uint32_t *)     ( INTC_BASE + 0x0008 ))
 
 #define INTC_EOIR        (*(volatile uint32_t *)     ( INTC_BASE + 0x0018 ))
+
+// INTC Priority Select Registers
+#define INTC_PSR         ( (volatile uint8_t  *)     ( INTC_BASE + 0x0040 ))
+
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // SIU
@@ -192,6 +199,10 @@ typedef struct {
 
     uint8_t data[8];
 } canbox_t;
+
+#define CAN_MCR_HALT_MSK    ( 1UL << 28 )
+#define CAN_MCR_FRZ_MSK     ( 1UL << 30 )
+#define CAN_MCR_MDIS_MSK    ( 1UL << 31 )
 
 #define CAN_A           (*(flexcan_t*)         ( FLEXCAN_A_BASE + 0x0000 ))
 #define CAN_A_BOX       ((canbox_t*)           ( FLEXCAN_A_BASE + 0x0080 ))

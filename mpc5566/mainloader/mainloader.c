@@ -30,9 +30,8 @@ const uint32_t maskCombination[] = {
     0x0FFFFFFF  // ..are not allowed to be set at the same time as these
 };
 
-// This one is actually .bss so the preloader must make sure it's cleared (which it does)
-// That's further reinforced by the main loader clearing the whole bss area
-volatile uint32_t mainReady = 0;
+uint32_t processorID;
+uint32_t clockFreq;
 
 #ifdef enableBroadcast
 volatile uint32_t msTimer = 0;
@@ -127,9 +126,8 @@ void canSend(const void *data)
 #ifdef enableDebugBOX
 void canSendFast_d(const void *data)
 {
-    uint32_t *box     = (uint32_t*)(0xFFFC00A0);
-    uint8_t  *boxData = (uint8_t *)&box[2];
-    uint8_t  *locData = (uint8_t *)data;
+    uint8_t *boxData = CAN_A_BOX[ CANBOX_DBG ].data;
+    const uint8_t *locData = (uint8_t *)data;
 
     for (uint32_t i = 0; i < 14000; i++)
         __asm volatile("nop");
@@ -137,7 +135,7 @@ void canSendFast_d(const void *data)
     for (uint32_t i = 0; i < 8; i++)
         *boxData++ = *locData++;
 
-    *box  |= 0x0C000000;
+    CAN_A_BOX[ CANBOX_DBG ].CODE |= 0x0C;
 
      for (uint32_t i = 0; i < 14000; i++)
         __asm volatile("nop");
@@ -224,9 +222,7 @@ static void configureFlash()
 
 static uint32_t configureFlexCAN()
 {
-    volatile uint32_t *CANa_MCR = (uint32_t *)&CAN_A.MCR.direct;
-             uint32_t *CANa_MB0 = (uint32_t *)CAN_A_BOX;
-             uint32_t *tmp      = CANa_MB0;
+    uint32_t *tmp = (uint32_t*)CAN_A_BOX;
 
 #ifdef BAMMODE
     // Enable CANRX / TX
@@ -234,26 +230,26 @@ static uint32_t configureFlexCAN()
     PCR83[0] = 0x613;
     PCR83[1] = 0x413;
 
-    *CANa_MCR &= ~0x80000000;
+    CAN_A.MCR.direct &= ~CAN_MCR_MDIS_MSK;
 #endif
 
-    *CANa_MCR |=  0x5000<<16; // Freeze enable / halt
+    CAN_A.MCR.direct |= (CAN_MCR_HALT_MSK | CAN_MCR_FRZ_MSK);
 
     // Wait for it to hit the brakes
-    while (!(*CANa_MCR & 0x01000000)) ;
+    while (!CAN_A.MCR.fields.FRZACK) ;
 
-    *CANa_MCR &= ~0x21003F;    // no buffers, disable MBFEN and warnings
+    CAN_A.MCR.direct &= ~0x0021003F;    // no buffers, disable MBFEN and warnings
 
 #if (defined(enableDebugBOX) && defined(enableBroadcast))
-    *CANa_MCR |=  0x020000 | 3; // No stupid self-reception and use 4 buffers
+    CAN_A.MCR.direct |=  0x020000 | 3; // No stupid self-reception and use 4 buffers
 #elif (defined(enableDebugBOX) || defined(enableBroadcast))
-    *CANa_MCR |=  0x020000 | 2; // No stupid self-reception and use 3 buffers
+    CAN_A.MCR.direct |=  0x020000 | 2; // No stupid self-reception and use 3 buffers
 #else
-    *CANa_MCR |=  0x020000 | 1; // No stupid self-reception and use 2 buffers
+    CAN_A.MCR.direct |=  0x020000 | 1; // No stupid self-reception and use 2 buffers
 #endif
 
     // Make sure bus off is automatically recovered + more
-    CANa_MCR[1] &= 0xFFFF2097;
+    CAN_A.CR.direct &= 0xFFFF2097;
 
     // Disable all boxes
     for (uint32_t i = 0; i < 64; i++) {
@@ -262,22 +258,24 @@ static uint32_t configureFlexCAN()
          tmp   += 2;
     }
 
-    CANa_MB0[0] |= 0x04080000; // (0) Receive
-    CANa_MB0[1]  = hostID << 18;
-    CANa_MB0[4] |= 0x08080000; // (1) Send
-    CANa_MB0[5]  = localID << 18;
+    *(uint32_t*)&CAN_A_BOX[ CANBOX_RX ] |= 0x04080000;
+    CAN_A_BOX[ CANBOX_RX ].ID.STD.ID = hostID;
+
+    *(uint32_t*)&CAN_A_BOX[ CANBOX_TX ] |= 0x08080000;
+    CAN_A_BOX[ CANBOX_TX ].ID.STD.ID = localID;
 
 #if (defined(enableDebugBOX) && defined(enableBroadcast))
-    CANa_MB0[8] |= 0x08080000;  // (2) Send
-    CANa_MB0[9]  = debugID << 18;
-    CANa_MB0[12] |= 0x08080000; // (3) Send
-    CANa_MB0[13]  = broadcastID << 18;
+    *(uint32_t*)&CAN_A_BOX[ CANBOX_DBG ] |= 0x08080000;
+    CAN_A_BOX[ CANBOX_DBG ].ID.STD.ID = debugID;
+    *(uint32_t*)&CAN_A_BOX[ CANBOX_BRC ] |= 0x08080000;
+    CAN_A_BOX[ CANBOX_BRC ].ID.STD.ID = broadcastID;
+    preloadBroadcast();
 #elif defined(enableDebugBOX)
-    CANa_MB0[8] |= 0x08080000;  // (2) Send
-    CANa_MB0[9]  = debugID << 18;
+    *(uint32_t*)&CAN_A_BOX[ CANBOX_DBG ] |= 0x08080000;
+    CAN_A_BOX[ CANBOX_DBG ].ID.STD.ID = debugID;
 #elif defined(enableBroadcast)
-    CANa_MB0[8] |= 0x08080000; // (2) Send
-    CANa_MB0[9]  = broadcastID << 18;
+    *(uint32_t*)&CAN_A_BOX[ CANBOX_BRC ] |= 0x08080000;
+    CAN_A_BOX[ CANBOX_BRC ].ID.STD.ID = broadcastID;
     preloadBroadcast();
 #endif
 
@@ -294,7 +292,7 @@ static uint32_t configureFlexCAN()
     uint8_t *PSRn = (uint8_t *)0xFFF480D8;
     PSRn[3] = 14; // Box 0 priority
 
-    *CANa_MCR &= ~0x10000000; // Negate halt
+    CAN_A.MCR.direct &= ~CAN_MCR_HALT_MSK;
     
     // Read register to clear flags
     return *(volatile uint32_t*)0xFFFC0020;
@@ -332,14 +330,15 @@ static void main_Init()
     writeSPR(SPR_DEC, 100);
 
     configureFlexCAN();
-    configureTBL();
+
     configureFlash();
 }
 
-void mainloop()
+void mainloop(uint32_t *const mainReady)
 {
     main_Init();
-    mainReady = 1;
+
+    *mainReady = 1;
 
     GMLAN_MainLoop();
 

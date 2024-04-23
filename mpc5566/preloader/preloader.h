@@ -5,13 +5,13 @@
 #include <stdint.h>
 
 // Linker magic; Refer to sections of main loader
-extern void mainloop();
-extern void softArbiter(const uint32_t softVec);
-extern void sendDebug(const uint32_t step, const uint32_t extra);
+extern void mainloop    (uint32_t *const mainReady);
+extern void softArbiter (const uint32_t softVec);
+extern void sendDebug   (const uint32_t step, const uint32_t extra);
 // "pointer" to compressed image of main loader
 extern uint8_t mainloader[];
 // Set to one once main loader is fit for external interrupts
-extern volatile uint32_t mainReady;
+// extern volatile uint32_t mainReady;
 
 // Keep track of which mode we are in (to trigger external watchdogs)
 extern uint32_t modeWord;
@@ -30,7 +30,7 @@ extern volatile uint32_t msTimer;
 // Actual interrupt entry, since we have to perform some magic
 void     intEntry();
 // The processor has to know where the new table is
-void     rebaseInterrupt(uint32_t base);
+void     rebaseInterrupt(void *base);
 // Enable interrupts
 void     enableEE();
 // Ack timer
@@ -38,5 +38,8 @@ void     ackTSR();
 // Configure timer register
 uint32_t readTCR();
 void     writeTCR (const uint32_t val);
+
+// Write random junk to the high portion of SRAM to initialise ECC
+void     initECC_hi();
 
 #endif

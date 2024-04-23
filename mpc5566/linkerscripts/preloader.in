@@ -2,31 +2,33 @@ STARTUP(out/startup.o)
 ENTRY(_Reset)
 
 MEMORY {
-    ram : ORIGIN = 0x40004000, LENGTH = 16K
+    RAM  (RWX) : ORIGIN = 0x40004000, LENGTH = 16K
+    RAMm (RWX) : ORIGIN = 0x40008000, LENGTH = 32K
 }
 
 SECTIONS {
 
     .text : {
         *(.text) 
-    } > ram
+    } > RAM
 
     .data : {
         . = ALIGN(4);
         *(.rodata)
         *(.data)
-#ifdef BAMMODE
-        /* Unless the main binary is cheating, you only have to do this in BAM mode. */
-        /* bss may sometimes be excluded (and align is ignored for some reason).     */
-        /* Why align? ECC must be initialised in 64-bit chunks on 64-bit boundaries. */
-        . = ALIGN(8);
-        __LoaderEnd = . ;
-#endif
-    } > ram
+        __e_loader = ALIGN(8);
+    } > RAM
 
     .bss : {
         *(.bss)
-    } > ram
+    } > RAM
+
+    .mainLoader : {
+        __s_mainLoader = . ;
+    } > RAMm
+
+
+    __s_stack = 0x40002000 - 24;
 }
 
 
