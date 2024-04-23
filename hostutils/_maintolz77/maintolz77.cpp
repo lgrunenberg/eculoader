@@ -136,6 +136,63 @@ int LZ_Compress(uint8_t *in, uint8_t *out, uint32_t insize)
 
 // LZ_Compress(uint8_t *in, uint8_t *out, uint32_t insize)
 
+typedef struct {
+	const uint32_t checksum;
+	const uint32_t sizeIn;
+} lzImage_t;
+
+
+static bool lzExtract(const lzImage_t* img, uint8_t* out)
+{
+	uint32_t chksum = img->checksum;
+	uint32_t insize = img->sizeIn;
+	uint32_t outpos = 0, inpos = 0;
+	const uint8_t* in = (uint8_t*)img;
+
+	chksum = ((chksum << 24) | ((chksum >> 8) & 0xff) << 16 | ((chksum >> 16) & 0xff) << 8 | ((chksum >> 24)&0xff));
+	insize = ((insize << 24) | ((insize >> 8) & 0xff) << 16 | ((insize >> 16) & 0xff) << 8 | ((insize >> 24)&0xff));
+
+	for (uint32_t i = 4; i < insize; i++)
+		chksum += in[i];
+
+	if (chksum != 0)
+	{
+		cout << "Generated image has the wrong checksum\n";
+		return false;
+	}
+
+	in += 8;
+	insize -= 8;
+
+	while (inpos < insize)
+	{
+		uint32_t flags = in[inpos++];
+
+		for (uint32_t mask = 0x80; inpos < insize && mask; mask = (mask >> 1))
+		{
+			if (flags & mask)
+			{
+				uint32_t length = ((in[inpos] >> 4) & 15) + 3;
+				uint32_t ofs = ((in[inpos] & 15) << 8 | in[inpos + 1]) + 1;
+
+				inpos += 2;
+
+				for (uint32_t i = 0; i < length; i++)
+				{
+					out[outpos] = out[outpos - ofs];
+					outpos++;
+				}
+			}
+			else
+			{
+				out[outpos++] = in[inpos++];
+			}
+		}
+	}
+
+	return true;
+}
+
 int main(int argc, char** argv)
 {
 	if (argc < 3)
@@ -170,10 +227,8 @@ int main(int argc, char** argv)
 		cout << "\nCould not allocate file buffer!\n";
 		return 1;
 	}
-	infile.read(dataIn, Len);
-	infile.close();
 
-	uint8_t *dataOut = (uint8_t*)malloc(Len * 2);
+	uint8_t* dataOut = (uint8_t*)malloc(Len * 2);
 	if (!dataOut)
 	{
 		std::free(dataIn);
@@ -181,7 +236,39 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	uint8_t* dataCompare = (uint8_t*)malloc(Len + 64);
+	if (!dataCompare)
+	{
+		std::free(dataOut);
+		std::free(dataIn);
+		cout << "\nCould not allocate compare buffer!\n";
+		return 1;
+	}
+
+	memset(dataCompare, 0x55, Len + 64);
+
+	infile.read(dataIn, Len);
+	infile.close();
+
 	uint32_t complen = LZ_Compress((uint8_t*)dataIn, dataOut, (unsigned int)Len);
+
+	if ( !lzExtract((lzImage_t*)dataOut, dataCompare) )
+	{
+		cout << "\nCould not verify image!\n";
+		std::free(dataIn);
+		std::free(dataOut);
+		std::free(dataCompare);
+		return 1;
+	}
+
+	if (memcmp(dataIn, dataCompare, (size_t)Len) != 0)
+	{
+		cout << "\nExtracted iamge is not identical to the original!\n";
+		std::free(dataIn);
+		std::free(dataOut);
+		std::free(dataCompare);
+		return 1;
+	}
 
 	ofstream outfile(filename.c_str(), ofstream::binary);
 	for (uint32_t i = 0; i < complen; i++)
@@ -191,6 +278,7 @@ int main(int argc, char** argv)
 
 	std::free(dataIn);
 	std::free(dataOut);
+	std::free(dataCompare);
 
 	return 0;
 }
