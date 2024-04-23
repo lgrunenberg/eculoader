@@ -41,7 +41,7 @@ extern volatile uint32_t msTimer;
 extern void broadcastMessage();
 #endif
 
-volatile uint32_t canInterframe;
+extern volatile uint32_t canInterframe;
 
 void GMLAN_Reset();
 void GMLAN_MainLoop();

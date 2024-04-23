@@ -245,7 +245,7 @@ void *hashMD5(const uint32_t addr, const uint32_t len)
     for ( ; left < 64; left++)
         buf[left] = 0;
 
-	*stfu = bs32(len << 3);
+    *stfu = bs32(len << 3);
 
     mdarray[0] = (uint32_t) &buf[0];
     mdarray[1] = 64;

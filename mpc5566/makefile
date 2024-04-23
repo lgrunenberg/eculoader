@@ -1,5 +1,10 @@
 PROC=powerpc
+
+ifdef OS
 TYPE=eabi
+else
+TYPE=linux-gnu
+endif
 
 AS  = $(PROC)-$(TYPE)-as
 CC  = $(PROC)-$(TYPE)-gcc
@@ -34,8 +39,14 @@ MODFLAG += -DenableBroadcast
 
 # Not really the correct model but we get the right instruction set.
 # (Avoid float just to stay safe. Don't know how it'll behave)
+ifdef OS
 TARGPROC = -mcpu=ec603e -mspe -mno-toc -mbig-endian
 GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC
+else
+TARGPROC = -mcpu=ec603e -mno-toc -mbig-endian
+GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC -nostdlib
+endif
+
 ASFLAGS  = $(TARGPROC) $(GLOBFLAGS) -c 
 CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -std=gnu99 -c
 

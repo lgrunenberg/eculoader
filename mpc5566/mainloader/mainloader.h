@@ -13,8 +13,8 @@ void     canSend    (const void    *data);
 void     canSendFast(const void    *data);
 void     sendDebug  (const uint32_t step , const uint32_t extra);
 void     sendDebug2 (const void    *ptr);
-uint32_t processorID;
-uint32_t clockFreq;
+extern uint32_t processorID;
+extern uint32_t clockFreq;
 
 ///////////////////////////////////////////
 ///////////////////////////////////////////

@@ -4,6 +4,9 @@
 // Flashing, Dumping, anything accessible by the host
 // MD5..
 #include "mainloader.h"
+uint32_t processorID;
+uint32_t clockFreq;
+volatile uint32_t canInterframe;
 
 // Os f*cks with or / and during while operations of volatile memory
 #pragma GCC push_options
