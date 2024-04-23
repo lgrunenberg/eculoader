@@ -10,18 +10,36 @@ using namespace logger;
 using namespace std;
 
 
-class parentlogger_t : logger_t {
+class parentlogger_t : public logger_t {
 public:
-    void log(logWho who, string message)
+    void log(const logWho & who, const string & message)
     {
         string loggedby;
 
         switch (who)
         {
-            default:           loggedby = "Unknown       : "; break;
+            case filemanager:  loggedby = "Filemanager   : "; break;
+            case e39log:       loggedby = "E39           : "; break;
+            case gmlanlog:     loggedby = "GMLAN         : "; break;
+            case adapterlog:   loggedby = "Adapter       : "; break;
+            default:           loggedby = "- - -         : "; break;
         }
 
         cout << loggedby + message + '\n';
+    }
+
+    void progress(uint32_t prog)
+    {
+        static uint32_t oldProg = 100;
+
+        if ( prog > 100 )
+            prog = 100;
+        
+        if ( prog < oldProg || prog >= (oldProg + 5) || (oldProg < prog && prog == 100))
+        {
+            oldProg = prog;
+            cout << to_string( prog ) << "%" "\n";
+        }
     }
 };
 
@@ -55,20 +73,18 @@ static void prepMain()
     signal(SIGABRT, lam);
     signal(SIGTERM, lam);
 
-    loggerInstall((logger_t*)&parentlogger);
+    loggerInstall( &parentlogger );
 }
-
-// mpc5566/out/mainloader.bin
 
 int main()
 {
+    prepMain();
+
+    log("Test");
+
     // adapterKvaser, adapterCanUsb
     string adapterList = "";
     list <string> adapters = ecu.listAdapters( adapterKvaser );
-
-    prepMain();
-
-    printf("Test\n");
 
     for (string adapt : adapters)
     {
@@ -86,7 +102,7 @@ int main()
     channelData chDat;
     chDat.name = adapters.front();
     chDat.bitrate = btr500k;
-    chDat.canIDs = { 0x7e0, 0x7e8, 0x101, 0x011 };
+    chDat.canIDs = { 0x7e0, 0x7e8, 0x101, 0x011, 0x002, 0x003 };
 
     if(! ecu.open( chDat ) )
     {
@@ -94,22 +110,7 @@ int main()
         return 1;
     }
 
-
-
-
     ecu.e39::dump();
-
-
-
-
-
-
-
-
-
-
-
-
 
     return 0;
 

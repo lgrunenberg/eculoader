@@ -3,7 +3,13 @@
 
 #include "logger.h"
 
+
+#include <iostream>
+#include <csignal>
+#include <cstdlib>
+
 using namespace std;
+using namespace logger;
 
 #warning "This needs rework!"
 
@@ -20,7 +26,7 @@ namespace logger
     void log(logWho who, string message)
     {
         logMtx.lock();
-        if (m_parent)
+        if (m_parent != nullptr)
             m_parent->log(who, message);
         logMtx.unlock();
     }
@@ -28,5 +34,13 @@ namespace logger
     void log(string message)
     {
         log(genericlog, message);
+    }
+
+    void progress(uint32_t prog)
+    {
+        logMtx.lock();
+        if (m_parent != nullptr)
+            m_parent->progress(prog);
+        logMtx.unlock();
     }
 }

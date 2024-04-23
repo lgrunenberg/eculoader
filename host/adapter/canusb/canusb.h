@@ -32,19 +32,17 @@ private:
 	bool                     loadLibrary();
     bool                     unloadLibrary();
     std::list <std::string>  findCANUSB();
-	void                    *m_open(std::string);
+	void                    *m_open(std::string&);
 	static void              messageThread(canusb*);
 
 	volatile bool            runThread;
 
 	std::thread             *messageThreadPtr = nullptr;
 
-
     bool closeChannel();
 
-
-    bool openChannel(FT_HANDLE, channelData &);
-    bool CalcAcceptanceFilters(FT_HANDLE, std::list <uint32_t>);
+    bool openChannel(channelData &);
+    bool CalcAcceptanceFilters(std::list <uint32_t>);
 };
 
 #endif

@@ -68,10 +68,10 @@ bool kvaser::CalcAcceptanceFilters(list<uint32_t> idList)
     {
         for (uint32_t canID : idList)
         {
-            // log("Filter+ " + to_hex(canID));
+            // log(adapterlog, "Filter+ " + to_hex(canID));
             if (canID == 0)
             {
-                log("Found illegal id");
+                log(adapterlog, "Found illegal id");
                 code = ~0;
                 mask = 0;
                 goto forbidden;
@@ -91,7 +91,7 @@ forbidden:
 /*
     if (canSetAcceptanceFilter(kvaserHandle, code, mask, 0) != canOK)
     {
-        log("Could not set acceptance filters");
+        log(adapterlog, "Could not set acceptance filters");
         return false;
     }
 */
@@ -111,7 +111,7 @@ void kvasOnCall(CanHandle hnd, void* context, unsigned int evt)
         while (canRead(hnd, &ID, msgData, &dlc, &flags, &ts) == canOK)
         {
             if (dlc > 8) {
-                log("Kvaser: unsup long msg");
+                log(adapterlog, "Kvaser: unsup long msg");
                 dlc = 8;
             }
 
@@ -151,26 +151,26 @@ bool kvaser::m_open(channelData device, int chan)
         sjw = 2;
         break;
     default:
-        log("Unknown bitrate");
+        log(adapterlog, "Unknown bitrate");
         return false;
     }
 
     kvaserHandle = (int32_t)canOpenChannel(chan, 0);
     if (kvaserHandle < 0)
     {
-        log("Could not retrieve handle");
+        log(adapterlog, "Could not retrieve handle");
         return false;
     }
 
     if (canSetBusParams(kvaserHandle, bitPerSec, tseg1, tseg2, sjw, samp, syncm) != canOK)
     {
-        log("Could not set bus parameters");
+        log(adapterlog, "Could not set bus parameters");
         return false;
     }
 
     if (canBusOn(kvaserHandle) != canOK)
     {
-        log("Could not open bus");
+        log(adapterlog, "Could not open bus");
         return false;
     }
 
@@ -180,7 +180,7 @@ bool kvaser::m_open(channelData device, int chan)
 #else
     if (kvSetNotifyCallback(kvaserHandle, &kvasOnCall, 0, canNOTIFY_RX | canNOTIFY_ERROR) != canOK) {
 #endif
-        log("Could not install callback");
+        log(adapterlog, "Could not install callback");
         return false;
     }
 
@@ -199,7 +199,7 @@ bool kvaser::open(channelData & device)
         return false;
     }
 
-    log("Trying to open " + name);
+    log(adapterlog, "Trying to open " + name);
 
     canStatus stat = canGetNumberOfChannels(&num);
 
@@ -216,7 +216,7 @@ bool kvaser::open(channelData & device)
 
         if (strname == name)
         {
-            log("Device located. Opening channel " + to_string(i) + "..");
+            log(adapterlog, "Device located. Opening channel " + to_string(i) + "..");
             this->close();
             return this->m_open(device, i);
         }

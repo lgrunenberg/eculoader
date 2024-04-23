@@ -32,30 +32,30 @@ adapter_t::~adapter_t()
 
 adapter::adapter()
 {
-    // cout << "Create one\r\n";
+	adapterContext = nullptr;
 }
 
 adapter::~adapter()
 {
-  	if (adapterContext)
+	if ( adapterContext != nullptr )
 	{
 		adapterContext->close();
 		adapterContext->~adapter_t();
-		adapterContext = 0;
+		adapterContext = nullptr;
 	}  
 }
 
-bool adapter::setAdapter(adaptertypes adapter)
+bool adapter::setAdapter(adaptertypes & adapter)
 {
 	// Close old context before opening a new one
-	if (adapterContext)
+	if ( adapterContext != nullptr )
 	{
 		adapterContext->close();
 		adapterContext->~adapter_t();
-		adapterContext = 0;
+		adapterContext = nullptr;
 	}
 
-	switch (adapter)
+	switch ( adapter )
 	{
 	case adapterCanUsb:
 		adapterContext = new canusb();
@@ -69,18 +69,17 @@ bool adapter::setAdapter(adaptertypes adapter)
 		break;
 	}
 
-	return (adapterContext) ? true : false;
+	return ( adapterContext != nullptr ) ? true : false;
 }
 
 list <string> adapter::listAdapters(adaptertypes adapter)
 {
 	// Fallback
-	list <string> noList;
+	static list <string> noList;
 
-
-	if (!setAdapter(adapter))
+	if ( !setAdapter(adapter) )
 	{
-		log("no set");
+		log(adapterlog, "no set");
 		return noList;
 	}
 
@@ -89,13 +88,15 @@ list <string> adapter::listAdapters(adaptertypes adapter)
 
 bool adapter::open(channelData & device)
 {
-/*
-	if (!setAdapter(adapter))
-		return false;
-*/
 	queueInit();
 
-	if (adapterContext->open(device))
+	if ( adapterContext == nullptr )
+	{
+		log(adapterlog, "No loaded adapter!");
+		return false;
+	}
+
+	if ( adapterContext->open(device) )
 	{
         sleepMS(1000);
 		return true;
@@ -106,12 +107,15 @@ bool adapter::open(channelData & device)
 
 bool adapter::close()
 {
-	if (adapterContext)
+	bool retval = true;
+
+	if ( adapterContext != nullptr )
 	{
-		return adapterContext->close();
+		retval = adapterContext->close();
+		adapterContext = nullptr;
 	}
 
-	return true;
+	return retval;
 }
 
 static inline void printMessageContents(string what, message_t *msg)
@@ -122,15 +126,15 @@ static inline void printMessageContents(string what, message_t *msg)
     for (uint32_t i = 0; i < msg->length; i++)
         strResp += to_hex((uint16_t)msg->message[i], 1);
 
-    log("Sent: " + strResp + "   (" + to_string_fcount(msg->timestamp, 6) + ")");
+    log(adapterlog, "Sent: " + strResp + "   (" + to_string_fcount(msg->timestamp, 6) + ")");
 }
 
 bool adapter::send(message_t *msg)
 {
-    msg->timestamp = (uint64_t) (duration_cast< microseconds >( system_clock::now().time_since_epoch()).count() % 1000000);
+    msg->timestamp = (uint64_t) (duration_cast<microseconds>(system_clock::now().time_since_epoch()).count() % 1000000);
     // printMessageContents("", msg);
 
-	if (adapterContext)
+	if ( adapterContext != nullptr )
 		return adapterContext->send(msg);
 
     return false;

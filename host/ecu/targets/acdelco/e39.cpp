@@ -89,7 +89,7 @@ bool e39::bamFlash(uint32_t address)
     {
         if (!send(&sMsg))
         {
-            log("Could not send!");
+            log(e39log, "Could not send!");
             return false;
         }
 
@@ -99,19 +99,19 @@ bool e39::bamFlash(uint32_t address)
         // tries--;
         if (tries == 0)
         {
-            log("Could not start bam!");
+            log(e39log, "Could not start bam!");
             return false;
         }
     } while (retVal != lazySWAP(bamKEY));
 
-    log("Key accepted");
+    log(e39log, "Key accepted");
 
     fileManager fm;
     fileHandle *file = fm.open("./loaderblobs/mpc5566_loader_bam.bin");
 
     if (!file || file->size < (6 * 1024))
     {
-        log("No file or too small");
+        log(e39log, "No file or too small");
         return false;
     }
 
@@ -119,7 +119,7 @@ bool e39::bamFlash(uint32_t address)
     uint8_t *tmpBuf = new uint8_t[alignedSize];
     if (tmpBuf == nullptr)
     {
-        log("Could not allocate buffer");
+        log(e39log, "Could not allocate buffer");
         return false;
     }
 
@@ -132,7 +132,7 @@ bool e39::bamFlash(uint32_t address)
     setupWaitMessage(2);
     if (!send(&sMsg))
     {
-        log("Could not send!");
+        log(e39log, "Could not send!");
         return false;
     }
 
@@ -144,7 +144,7 @@ bool e39::bamFlash(uint32_t address)
     uint32_t bufPntr = 0;
     if (retVal == cmd)
     {
-        log("Address and size accepted");
+        log(e39log, "Address and size accepted");
 
         sMsg = newMessage(0x13, 8);
 
@@ -163,7 +163,7 @@ bool e39::bamFlash(uint32_t address)
             sleepMS(4);
             if (!send(&sMsg))
             {
-                log("Could not send!");
+                log(e39log, "Could not send!");
                 return false;
             }
 
@@ -176,7 +176,7 @@ bool e39::bamFlash(uint32_t address)
 
             if (retVal != cmd)
             {
-                log("Did not receive the same data");
+                log(e39log, "Did not receive the same data");
                 // CastInfoEvent("Did not receive the same data: " + respData.ToString("X16"), ActivityType.ConvertingFile);
                 return false;
             }
@@ -210,7 +210,7 @@ static void calculateKeyForE39(uint8_t *seed)
 
     _seed &= 0xffff;
 
-    log("Calculated key " + to_hex(_seed, 2) + " from seed " + to_hex(origSeed, 2));
+    log(e39log, "Calculated key " + to_hex(_seed, 2) + " from seed " + to_hex(origSeed, 2));
 
     seed[0] = _seed >> 8;
     seed[1] = _seed;
@@ -235,7 +235,7 @@ bool e39::secAccE39(uint8_t lev)
 
     if (ret[4] == 0 && ret[5] == 0)
     {
-        log("Already granted");
+        log(e39log, "Already granted");
         delete[] ret;
         return true;
     }
@@ -288,7 +288,7 @@ bool e39::initSessionE39()
     testerPresent();
     sleepMS(20);
 
-    log("Checking loader state..");
+    log(e39log, "Checking loader state..");
 
     if ( (tmp = ReadDataByIdentifier(0x90)) != nullptr )
     {
@@ -300,11 +300,11 @@ bool e39::initSessionE39()
 
     if ( ident != "MPC5566-LOADER: TXSUITE.ORG" )
     {
-        log("Loader not active. Starting upload..");
+        log(e39log, "Loader not active. Starting upload..");
 
         if ( !InitiateDiagnosticOperation(3) ) // 10
         {
-            log("initDiag error");
+            log(e39log, "initDiag error");
             return false;
         }
 
@@ -317,7 +317,7 @@ bool e39::initSessionE39()
 
         if (!secAccE39(1))
         {
-            log("Could not gain security access");
+            log(e39log, "Could not gain security access");
             return false;
         }
 
@@ -340,7 +340,7 @@ bool e39::initSessionE39()
 
         if (!file || file->size < (6 * 1024))
         {
-            log("No file or too small");
+            log(e39log, "No file or too small");
             return false;
         }
 
@@ -352,7 +352,7 @@ bool e39::initSessionE39()
         uint8_t *tmpBuf = new uint8_t[ alignedSize ];
         if (tmpBuf == nullptr)
         {
-            log("Could not allocate buffer");
+            log(e39log, "Could not allocate buffer");
             return false;
         }
 
@@ -363,14 +363,14 @@ bool e39::initSessionE39()
         tmpBuf[6] = modeE39 >> 8;
         tmpBuf[7] = modeE39;
 
-        log("Uploading bootloader");
+        log(e39log, "Uploading bootloader");
 
         // The morons use a weird request without the format byte..
         if (!requestDownload_24( alignedSize ))
         {
             // The 39a log shows the ECU outright refusing but still accepting a transfer after. Weird fella..
 
-            log("Could not upload bootloader");
+            log(e39log, "Could not upload bootloader");
             delete[] tmpBuf;
             return false;
         }
@@ -379,17 +379,17 @@ bool e39::initSessionE39()
 
         if (!transferData_32(tmpBuf, 0x40004000, alignedSize, 0x80, true))
         {
-            log("Could not upload bootloader");
+            log(e39log, "Could not upload bootloader");
             delete[] tmpBuf;
             return false;
         }
 
-        log("Bootloader uploaded");
+        log(e39log, "Bootloader uploaded");
         delete[] tmpBuf;
     }
     else
     {
-        log("Bootloader already active");
+        log(e39log, "Bootloader already active");
     }
 
     return true;
@@ -440,13 +440,13 @@ bool e39::getSecBytes(uint32_t secLockAddr, uint32_t progModeAddr)
     
     if ( (b = readMemoryByAddress_32_16(secLockAddr, 1, 1)) != nullptr )
     {
-        log("secLock: " + to_hex((volatile uint32_t)*b, 1));
+        log(e39log, "secLock: " + to_hex((volatile uint32_t)*b, 1));
         delete[] b;
     }
 
     if ( (b = readMemoryByAddress_32_16(progModeAddr, 1, 1)) != nullptr )
     {
-        log("progMode: " + to_hex((volatile uint32_t)*b, 1));
+        log(e39log, "progMode: " + to_hex((volatile uint32_t)*b, 1));
         delete[] b;
     }
 
@@ -466,7 +466,7 @@ bool e39::initSessionE39A()
     testerPresent();
     sleepMS(20);
 
-    log("Checking loader state..");
+    log(e39log, "Checking loader state..");
 
     if ( (tmp = ReadDataByIdentifier(0x90)) != nullptr )
     {
@@ -478,12 +478,12 @@ bool e39::initSessionE39A()
 
     if ( ident != "MPC5566-LOADER: TXSUITE.ORG" )
     {
-        log("Loader not active. Starting upload..");
+        log(e39log, "Loader not active. Starting upload..");
 
 // TODO: Investigate why it SOMETIMES wants this to be two
         if ( !InitiateDiagnosticOperation(3) ) // 10
         {
-            log("initDiag error");
+            log(e39log, "initDiag error");
             return false;
         }
 
@@ -498,7 +498,7 @@ bool e39::initSessionE39A()
 
         if (!secAccE39( 1 ))
         {
-            log("Could not gain security access");
+            log(e39log, "Could not gain security access");
             return false;
         }
 
@@ -517,17 +517,15 @@ bool e39::initSessionE39A()
 
         if (!file || file->size < (6 * 1024))
         {
-            log("No file or too small");
+            log(e39log, "No file or too small");
             return false;
         }
-
-        log("Really here");
 
         uint32_t alignedSize = (file->size + 15) & ~15;
         uint8_t *tmpBuf = new uint8_t[ alignedSize ];
         if (tmpBuf == nullptr)
         {
-            log("Could not allocate buffer");
+            log(e39log, "Could not allocate buffer");
             return false;
         }
 
@@ -544,14 +542,14 @@ bool e39::initSessionE39A()
         // Just to check if it returned states for some weird reason
         getSecBytes( 0x40015264, 0x40015259 );
 
-        log("Uploading bootloader");
+        log(e39log, "Uploading bootloader");
 
         // The morons use a weird request without the format byte..
         if (!requestDownload_24( alignedSize ))
         {
             // The 39a log shows the ECU outright refusing but still accepting a transfer after. Weird fella..
 
-            log("Could not upload bootloader");
+            log(e39log, "Could not upload bootloader");
             delete[] tmpBuf;
             return false;
         }
@@ -560,17 +558,17 @@ bool e39::initSessionE39A()
 
         if (!transferData_32(tmpBuf, 0x40004000, alignedSize, 0x80, true))
         {
-            log("Could not upload bootloader");
+            log(e39log, "Could not upload bootloader");
             delete[] tmpBuf;
             return false;
         }
 
-        log("Bootloader uploaded");
+        log(e39log, "Bootloader uploaded");
         delete[] tmpBuf;
     }
     else
     {
-        log("Bootloader already active");
+        log(e39log, "Bootloader already active");
     }
 
     return true;
@@ -593,7 +591,7 @@ bool e39::play()
 
     if (!secAccE39(1))
     {
-        log("Could not gain security access");
+        log(e39log, "Could not gain security access");
         return false;
     }
 
@@ -611,7 +609,7 @@ bool e39::play()
 
     if ( !InitiateDiagnosticOperation(2) ) // 10
     {
-        log("Init diag error");
+        log(e39log, "Init diag error");
         return false;
     }
 
@@ -653,7 +651,7 @@ bool e39::play()
         }
         else
         {
-            log("Failed addres: " + to_hex(rdAddr, 4));
+            log(e39log, "Failed addres: " + to_hex(rdAddr, 4));
         }
 
         bufIdx += agSz;
@@ -673,7 +671,7 @@ bool e39::play()
 
 bool e39::dump()
 {
-    log("Dump");
+    log(e39log, "Dump");
 
 
     // bamFlash(0x40004000);
@@ -683,11 +681,13 @@ bool e39::dump()
 
     // play();
 
-    initSessionE39A();
+    initSessionE39();
 
-    // return false;
 
-    if (loader_StartRoutineById(0, 0, 0x300000))
+
+    // Let's make it 256k - more than enough to verify basic functionality
+    // 0x300000
+    if (loader_StartRoutineById(0, 0, 0x40000))
     {
         uint8_t *dat;
         if ((dat = loader_requestRoutineResult(0)) != 0)
@@ -697,10 +697,11 @@ bool e39::dump()
             for (uint32_t i = 0; i < retLen; i++)
                 md5 += to_hex((volatile uint32_t)dat[2 + i], 1);
 
-            log("Success: " + md5);
+            log(e39log, "Success: " + md5);
             delete[] dat;
         }
     }
+
     // newWriteDataById(0x91, new byte[] { (byte)(delay >> 8), (byte)delay });
 
     uint32_t del = 250;
@@ -708,16 +709,19 @@ bool e39::dump()
 
     if (WriteDataByIdentifier(byId, 0x91, 2))
     {
-        log("Delay set ok");
+        log(e39log, "Delay set ok");
     }
 
     sleepMS(100);
     uint8_t *dat;
     auto timeStart = system_clock::now();
 
-    if ((dat = loader_readMemoryByAddress(0, 0x300000, 245)) != 0)
+
+    // Let's make it 256k - more than enough to verify basic functionality
+    // 0x300000
+    if ((dat = loader_readMemoryByAddress(0, 0x40000, 245)) != 0)
     {
-        log("Data Read ok");
+        log(e39log, "Data Read ok");
         /*
         string md5 = "";
         for (uint32_t i = 0; i < 0x100; i++)
@@ -725,7 +729,7 @@ bool e39::dump()
             md5 += to_hex((volatile uint32_t)dat[i], 1);
             if ((i & 15) == 15)
             {
-                log("Dat: " + md5);
+                log(e39log, "Dat: " + md5);
                 md5 = "";
             }
         }
@@ -737,10 +741,12 @@ bool e39::dump()
     uint32_t secTaken = msTaken / 1000;
     uint32_t minTaken = msTaken / 60000;
     msTaken %= 1000;
-    log("Duration " + to_string(minTaken) + "m, " + to_string(secTaken) + "s, " + to_string(msTaken) + "ms");
+    secTaken %= 60;
 
+    log(e39log, "Duration " + to_string(minTaken) + "m, " + to_string(secTaken) + "s, " + to_string(msTaken) + "ms");
 
-    sleepMS(25000);
+    sleepMS(2000);
+
     returnToNormal();
 
     return true;

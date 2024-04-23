@@ -1,3 +1,7 @@
+#include <cstdio>
+#include <cstdint>
+#include <cstring>
+
 #include "gmloader.h"
 
 #include "../../tools/tools.h"
@@ -9,11 +13,13 @@ bool gmloader::loader_StartRoutineById(uint8_t service, uint32_t param1, uint32_
 {
     uint32_t tries = 5;
     uint8_t *ret, buf[10] = {0x31};
+
     buf[1] = (uint8_t)service;
     buf[2] = (uint8_t)(param1 >> 24);
     buf[3] = (uint8_t)(param1 >> 16);
     buf[4] = (uint8_t)(param1 >> 8);
     buf[5] = (uint8_t)(param1);
+
     buf[6] = (uint8_t)(param2 >> 24);
     buf[7] = (uint8_t)(param2 >> 16);
     buf[8] = (uint8_t)(param2 >> 8);
@@ -21,7 +27,7 @@ bool gmloader::loader_StartRoutineById(uint8_t service, uint32_t param1, uint32_
 
     while (--tries > 0)
     {
-        if ((ret = sendRequest(buf, 10)) == 0)
+        if ((ret = sendRequest(buf, 10)) == nullptr)
             continue;
 
         if ((uint32_t)(ret[0] << 8 | ret[1]) != 2 || ret[2] != 0x71 || ret[3] != service)
@@ -43,12 +49,14 @@ bool gmloader::loader_StartRoutineById(uint8_t service, uint32_t param1, uint32_
 uint8_t *gmloader::loader_readMemoryByAddress(uint32_t address, uint32_t len, uint32_t blockSize)
 {
     if (len == 0)
-        return 0;
+        return nullptr;
 
     uint8_t *ret, buf[9] = {0x23};
     uint8_t *dataBuf = new uint8_t[len];
     uint32_t dataLeft = len;
     uint32_t dataPtr = 0;
+
+    progress( 0 );
 
     while (dataLeft > 0)
     {
@@ -60,12 +68,13 @@ uint8_t *gmloader::loader_readMemoryByAddress(uint32_t address, uint32_t len, ui
         buf[5] = (thisLen >> 8);
         buf[6] = thisLen;
 
-        if ((ret = sendRequest(buf, 7)) == 0)
+        if ((ret = sendRequest(buf, 7)) == nullptr)
         {
-            log("No retbuffer for read by address");
+            log(gmlanlog, "No retbuffer for read by address");
             delete[] dataBuf;
-            return 0;
+            return nullptr;
         }
+
         uint32_t retLen = (ret[0] << 8 | ret[1]);
 
         // Catch ff-skip
@@ -76,8 +85,7 @@ uint8_t *gmloader::loader_readMemoryByAddress(uint32_t address, uint32_t len, ui
             ret[5] == 0xff &&
             ret[6] == 0xff)
         {
-            for (uint32_t i = 0; i < thisLen; i++)
-                dataBuf[dataPtr + i] = 0xff;
+            memset(&dataBuf[dataPtr], 0xff, thisLen);
         }
         else
         {
@@ -85,13 +93,14 @@ uint8_t *gmloader::loader_readMemoryByAddress(uint32_t address, uint32_t len, ui
             // xx xx 63 xx xx xx xx .. CS CS
             if (retLen != (thisLen + 7) || ret[2] != 0x63)
             {
-                log("Read unexpected response");
+                log(gmlanlog, "Read unexpected response");
                 delete[] ret;
                 delete[] dataBuf;
-                return 0;
+                return nullptr;
             }
 
             uint32_t checksum = 0;
+
             for (uint32_t i = 0; i < thisLen; i++)
             {
                 checksum += ret[(7) + i];
@@ -100,10 +109,10 @@ uint8_t *gmloader::loader_readMemoryByAddress(uint32_t address, uint32_t len, ui
 
             if ((uint32_t)(ret[thisLen + 7] << 8 | ret[thisLen + 8]) != (checksum & 0xffff))
             {
-                log("Checksum mismatch!");
+                log(gmlanlog, "Checksum mismatch!");
                 delete[] ret;
                 delete[] dataBuf;
-                return 0;
+                return nullptr;
             }
         }
 
@@ -111,6 +120,8 @@ uint8_t *gmloader::loader_readMemoryByAddress(uint32_t address, uint32_t len, ui
         dataLeft -= thisLen;
         address += thisLen;
         dataPtr += thisLen;
+
+        progress( (uint32_t)(float) ( 100.0 * (len-dataLeft)) / len );
     }
 
     return dataBuf;
@@ -121,16 +132,16 @@ uint8_t *gmloader::loader_requestRoutineResult(uint8_t service)
     uint32_t tries = 5;
     uint8_t *ret, buf[2] = {0x33, service};
 
-    while (--tries > 0)
+    while ( --tries )
     {
-        if ((ret = sendRequest(buf, 2)) != 0)
+        if ((ret = sendRequest(buf, 2)) != nullptr)
         {
             uint32_t retLen = (uint32_t)(ret[0] << 8 | ret[1]);
 
-            // Just pass through and delete the data
             if (retLen < 2)
-                ;
-
+            {
+                // .. do nothing and let it delete data
+            }
             // Busy, come again. This is actually a kwp2k command but it suits our needs
             else if (retLen > 2 && ret[2] == 0x7f && ret[3] == 0x33 && ret[4] == 0x21)
             {
@@ -141,10 +152,12 @@ uint8_t *gmloader::loader_requestRoutineResult(uint8_t service)
                 retLen -= 2;
                 ret[0] = retLen >> 8;
                 ret[1] = retLen;
+
                 for (uint32_t i = 0; i < retLen; i++)
                 {
                     ret[2 + i] = ret[4 + i];
                 }
+
                 return ret;
             }
 
@@ -156,4 +169,3 @@ uint8_t *gmloader::loader_requestRoutineResult(uint8_t service)
 
     return nullptr;
 }
-

@@ -26,6 +26,3 @@ void sleepMicro(const uint32_t uTime)
         ;
 }
 }
-
-
-

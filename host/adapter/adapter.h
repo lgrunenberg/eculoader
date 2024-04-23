@@ -1,10 +1,11 @@
 #ifndef ADAPTER_H
 #define ADAPTER_H
 
+#include "message.h"
+
 #include <cstdio>
 #include <string>
 #include <list>
-#include "message.h"
 
 class adapterDesc;
 
@@ -53,15 +54,14 @@ public:
     explicit adapter();
     ~adapter();
 	std::list <std::string> listAdapters(adaptertypes);
-	// std::list <std::string> listAdapters(adaptertypes);
 	bool open(channelData&);
 	bool close();
 	bool send(msgsys::message_t*);
 protected:
 
 private:
-	bool setAdapter(adaptertypes);
-    adapter_t *adapterContext = 0;
+	bool setAdapter(adaptertypes &);
+    adapter_t *adapterContext;
 };
 
 

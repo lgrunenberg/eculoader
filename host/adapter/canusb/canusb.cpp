@@ -35,10 +35,10 @@ extern "C"
 
 bool canusb::loadLibrary()
 {
-    log("Load library");
+    log(adapterlog, "Load library");
     if ((m_hmodule = LoadLibrary("ftd2xx64.dll")) == nullptr)
     {
-        log("Could not load ftd2xx.dll");
+        log(adapterlog, "Could not load ftd2xx.dll");
         return false;
     }
 
@@ -47,14 +47,13 @@ bool canusb::loadLibrary()
 
 bool canusb::unloadLibrary()
 {
-
+    log(adapterlog, "Unload library");
     if (m_hmodule != nullptr)
     {
         FreeLibrary((HMODULE)m_hmodule);
         m_hmodule = nullptr;
     }
 
-    log("Unload dll");
     return true;
 }
 
@@ -70,7 +69,7 @@ std::list<std::string> canusb::findCANUSB()
 
     if (FT_CreateDeviceInfoList(&numDevices) != FT_OK)
     {
-        log("Could not generate list of ftdi devices");
+        log(adapterlog, "Could not generate list of ftdi devices");
         return adapters;
     }
 
@@ -78,13 +77,13 @@ std::list<std::string> canusb::findCANUSB()
 
     if (numDevices == 0)
     {
-        log("No ftdi devices connected to the system");
+        log(adapterlog, "No ftdi devices connected to the system");
         return adapters;
     }
 
     if (FT_GetDeviceInfoList(devInfo, &numDevices) != FT_OK)
     {
-        log("Could not retrieve list of ftdi devices");
+        log(adapterlog, "Could not retrieve list of ftdi devices");
         return adapters;
     }
 
@@ -122,7 +121,7 @@ std::list <std::string> canusb::findCANUSB()
 
             if (!(handle = usb_open(dev)))
             {
-                log("Could not open a device that had id match");
+                log(adapterlog, "Could not open a device that had id match");
                 continue;
             }
             usb_get_string_simple(handle, dev->descriptor.iManufacturer, VID, 256);
@@ -132,7 +131,7 @@ std::list <std::string> canusb::findCANUSB()
                 toString(PID) == "CANUSB"  && 
                 toString(DSN).size() > 0    )
             {
-                log("Found it!");
+                log(adapterlog, "Found it!");
                 adapters.push_back(toString(DSN));
             }
 
@@ -143,7 +142,7 @@ std::list <std::string> canusb::findCANUSB()
     return adapters;
 }
 
-void *canusb::m_open(string identifier)
+void *canusb::m_open(string &identifier)
 {
     struct usb_device *dev;
     struct usb_bus *bus;
@@ -169,7 +168,7 @@ void *canusb::m_open(string identifier)
                 toString(PID) == "CANUSB"  && 
                 toString(DSN) == identifier )
             {
-                log("Found device of serial no");
+                log(adapterlog, "Found device of serial no");
                 return handle;
             }
 
@@ -191,7 +190,7 @@ canusb::canusb()
 
 canusb::~canusb()
 {
-    log("Canusb going down");
+    log(adapterlog, "Canusb going down");
     this->close();
 
 #if defined (_WIN32)
@@ -199,7 +198,7 @@ canusb::~canusb()
 #endif
 }
 
-bool canusb::openChannel(FT_HANDLE ftHandle, channelData & device)
+bool canusb::openChannel(channelData & device)
 {
     char buf[16] = {0x0d, 0x0d, 0x0d, 0};
     DWORD retLen;
@@ -207,10 +206,10 @@ bool canusb::openChannel(FT_HANDLE ftHandle, channelData & device)
     bool predefBtr = false;
 
     // Clear old commands
-    FT_Purge(ftHandle, FT_PURGE_RX);
-    if (FT_Write((FT_HANDLE)ftHandle, buf, 3, &retLen) != FT_OK)
+    FT_Purge(canusbContext, FT_PURGE_RX);
+    if (FT_Write(canusbContext, buf, 3, &retLen) != FT_OK)
     {
-        log("Write failed");
+        log(adapterlog, "Write failed");
         return false;
     }
 
@@ -235,7 +234,7 @@ bool canusb::openChannel(FT_HANDLE ftHandle, channelData & device)
         break;
 
     default:
-        log("Unknown baud enum");
+        log(adapterlog, "Unknown baud enum");
         return false;
     }
 
@@ -243,45 +242,45 @@ bool canusb::openChannel(FT_HANDLE ftHandle, channelData & device)
     if ( predefBtr )
     {
         sprintf(buf, "S%u\r", btrBits);
-        FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
-        if (FT_Write((FT_HANDLE)ftHandle, buf, 3, &retLen) != FT_OK)
+        FT_Purge(canusbContext, FT_PURGE_RX);
+        if (FT_Write(canusbContext, buf, 3, &retLen) != FT_OK)
         {
-            log("Write failed");
+            log(adapterlog, "Write failed");
             return false;
         }
     }
     else
     {
         sprintf(buf, "s%04X\r", btrBits);
-        FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
-        if (FT_Write((FT_HANDLE)ftHandle, buf, 6, &retLen) != FT_OK)
+        FT_Purge(canusbContext, FT_PURGE_RX);
+        if (FT_Write(canusbContext, buf, 6, &retLen) != FT_OK)
         {
-            log("Write failed");
+            log(adapterlog, "Write failed");
             return false;
         }
     }
 
     sprintf(buf, "Z0\r"); // Get lost timestamps
-    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
-    if (FT_Write((FT_HANDLE)ftHandle, buf, 3, &retLen) != FT_OK)
+    FT_Purge(canusbContext, FT_PURGE_RX);
+    if (FT_Write(canusbContext, buf, 3, &retLen) != FT_OK)
     {
-        log("Write failed");
+        log(adapterlog, "Write failed");
         return false;
     }
 
-    if (!CalcAcceptanceFilters(ftHandle, device.canIDs))
+    if (!CalcAcceptanceFilters(device.canIDs))
     {
-        log("Couldn't set can filters");
+        log(adapterlog, "Couldn't set can filters");
         return false;
     }
 
     // Open device
     strcpy( buf, "O\r" );
-    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
-    return  (FT_Write((FT_HANDLE)ftHandle, buf, 2, &retLen) == FT_OK) ? true : false;
+    FT_Purge(canusbContext, FT_PURGE_RX);
+    return  (FT_Write(canusbContext, buf, 2, &retLen) == FT_OK) ? true : false;
 }
 
-bool canusb::CalcAcceptanceFilters(FT_HANDLE ftHandle, list<uint32_t> idList)
+bool canusb::CalcAcceptanceFilters(list<uint32_t> idList)
 {
     uint32_t code = ~0;
     uint32_t mask = 0;
@@ -299,7 +298,7 @@ bool canusb::CalcAcceptanceFilters(FT_HANDLE ftHandle, list<uint32_t> idList)
         {
             if (canID == 0)
             {
-                log("Found illegal id");
+                log(adapterlog, "Found illegal id");
                 code = 0;
                 mask = ~0;
                 break;
@@ -313,15 +312,15 @@ bool canusb::CalcAcceptanceFilters(FT_HANDLE ftHandle, list<uint32_t> idList)
     mask |= mask << 16;
 
     sprintf(buf, "M%08X\r", code);
-    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
-    if (FT_Write((FT_HANDLE)ftHandle, buf, 10, &retLen) != FT_OK)
+    FT_Purge(canusbContext, FT_PURGE_RX);
+    if (FT_Write(canusbContext, buf, 10, &retLen) != FT_OK)
     {
         return false;
     }
 
     sprintf(buf, "m%08X\r", mask);
-    FT_Purge((FT_HANDLE)ftHandle, FT_PURGE_RX);
-    return (FT_Write((FT_HANDLE)ftHandle, buf, 10, &retLen) == FT_OK) ? true : false;
+    FT_Purge(canusbContext, FT_PURGE_RX);
+    return (FT_Write(canusbContext, buf, 10, &retLen) == FT_OK) ? true : false;
 }
 
 
@@ -347,8 +346,6 @@ typedef struct {
   unsigned char len;        // Frame size (0.8)
   unsigned char data[8];    // Databytes 0..7
 } CANMsg;
-
-#define SPEED   6  // Speed for interface - See CANUSB 'O' command
 
 bool canusb::send(message_t *msg)
 {
@@ -392,16 +389,16 @@ bool canusb::closeChannel()
     char buf[ 3 ] = { 'C', '\r' };
     FT_STATUS status = FT_OK;
     
-    // log("Adapter close");
+    // log(adapterlog, "Adapter close");
     if (canusbContext != nullptr)
     {
         // Close device
-        FT_Purge((FT_HANDLE)canusbContext, FT_PURGE_RX | FT_PURGE_TX);
+        FT_Purge(canusbContext, FT_PURGE_RX | FT_PURGE_TX);
 
         DWORD retLen;
-        FT_Write((FT_HANDLE)canusbContext, buf, 2, &retLen);
+        FT_Write(canusbContext, buf, 2, &retLen);
 
-        status = FT_Close((FT_HANDLE)canusbContext);
+        status = FT_Close(canusbContext);
     }
 
     if (status == FT_OK)
@@ -409,14 +406,14 @@ bool canusb::closeChannel()
         return true;
     }
 
-    log("Could not close transport to adapter");
+    log(adapterlog, "Could not close transport to adapter");
     return false;
 }
 
 static inline void canusbToCanMsg(char *p, message_t *msg)
 {
     int val;
-    short data_offset; // Offset to dlc byte
+    uint32_t data_offset; // Offset to dlc byte
     char save;
 
     msg->typemask = 0;
@@ -439,7 +436,7 @@ static inline void canusbToCanMsg(char *p, message_t *msg)
         p[9] = 0;
         break;
     default:
-        log("canusbToCanMsg: Big oops!");
+        log(adapterlog, "canusbToCanMsg: Big oops!");
         return;
     }
 
@@ -454,14 +451,13 @@ static inline void canusbToCanMsg(char *p, message_t *msg)
     // Fill in data
     if (!(msg->typemask & messageRemote))
     {
-        // MIN(msg->length, 8)
         uint32_t ln = msg->length;
         if (ln > 8) ln = 8;
         for (uint32_t i = ln; i > 0; i--)
         {
             *(p + data_offset + 2 * (i - 1) + 2) = 0;
             sscanf(p + data_offset + 2 * (i - 1), "%x", &val);
-            msg->message[i - 1] = val;
+            msg->message[i - 1] = (uint8_t)val;
         }
     }
 
@@ -476,7 +472,7 @@ static inline void canusbToCanMsg(char *p, message_t *msg)
         {
             p[data_offset + 2 * (msg->length) + 4] = 0;
             sscanf((p + data_offset + 2 * (msg->length)), "%x", &val);
-            msg->timestamp = val;
+            msg->timestamp = (uint8_t)val;
         }
     }
 
@@ -491,7 +487,7 @@ static inline void canusbToCanMsg(char *p, message_t *msg)
         }
     }
 
-    messageReceive(msg);
+    messageReceive( msg );
 }
 
 #if defined (_WIN32)
@@ -509,27 +505,27 @@ void canusb::messageThread(canusb *thisInstance)
     FT_SetEventNotification(thisInstance->canusbContext, FT_EVENT_RXCHAR, hEvent);
 
     // Start fresh
-    FT_Purge((FT_HANDLE)thisInstance->canusbContext, FT_PURGE_RX);
+    FT_Purge(thisInstance->canusbContext, FT_PURGE_RX);
 
     while (thisInstance->runThread)
     {
         WaitForSingleObject(hEvent, 500);
 
-        uint32_t getstat = FT_GetStatus((FT_HANDLE)thisInstance->canusbContext, &nRxCnt, &nTxCnt, &eventStatus);
+        uint32_t getstat = FT_GetStatus(thisInstance->canusbContext, &nRxCnt, &nTxCnt, &eventStatus);
         if (getstat != FT_OK && thisInstance->runThread)
         {
-            log("ft_status: " + to_hex(getstat));
+            log(adapterlog, "ft_status: " + to_hex(getstat));
         }
 
         if (nRxCnt)
         {
             if (nRxCnt > sizeof(gbufferRx))
             {
-                log("Overflow!");
+                log(adapterlog, "Overflow!");
                 nRxCnt = sizeof(gbufferRx);
             }
 
-            if (FT_Read((FT_HANDLE)thisInstance->canusbContext, gbufferRx, nRxCnt, &nRcvCnt) == FT_OK)
+            if (FT_Read(thisInstance->canusbContext, gbufferRx, nRxCnt, &nRcvCnt) == FT_OK)
             {
                 for (uint32_t i = 0; i < nRcvCnt; i++)
                 {
@@ -548,7 +544,7 @@ void canusb::messageThread(canusb *thisInstance)
                         }
 
                         if (cntMsgRcv > (1 + 3 + 1 + 16 + 1))
-                            log("cntMsgRcv >!");
+                            log(adapterlog, "cntMsgRcv >!");
                     }
 
                     // Start of message
@@ -557,7 +553,7 @@ void canusb::messageThread(canusb *thisInstance)
                         switch (c)
                         {
                         case '\a': // Error
-                            log("error response");
+                            log(adapterlog, "error response");
                             break;
                         case '\r':
                             inMessage = false;
@@ -574,20 +570,20 @@ void canusb::messageThread(canusb *thisInstance)
                         case 'z': // Response to sent standard frame
                             break;
                         default:
-                            log("Unknown char: " + to_hex((uint16_t)c, 1));
+                            log(adapterlog, "Unknown char: " + to_hex((uint16_t)c, 1));
                             break;
                         }
                     }
                 }
             }
-            else
+            else if ( thisInstance->runThread )
             {
-                log("FT_Read failed");
+                log(adapterlog, "FT_Read failed");
             }
         }
     }
 
-    log("Message thread going down");
+    log(adapterlog, "Message thread going down");
 }
 
 bool canusb::open(channelData & device)
@@ -597,57 +593,61 @@ bool canusb::open(channelData & device)
     this->close();
     DWORD retLen;
 
-    log("OpenEx");
+    log(adapterlog, "OpenEx");
 
     canusbContext = nullptr;
 
-    if (FT_OpenEx((PVOID)identifier.c_str(), FT_OPEN_BY_SERIAL_NUMBER, &canusbContext) == FT_OK)
+    if (FT_OpenEx((void*)identifier.c_str(), FT_OPEN_BY_SERIAL_NUMBER, &canusbContext) == FT_OK)
     {
         if (canusbContext == nullptr)
         {
-            log("FT_OpenEx nullptr");
+            log(adapterlog, "FT_OpenEx nullptr");
             return false;
         }
 
         char buf[3] = {'C', '\r', 0};
-        FT_Purge((FT_HANDLE)canusbContext, FT_PURGE_RX | FT_PURGE_TX);
-        FT_Write((FT_HANDLE)canusbContext, buf, 2, &retLen);
+        FT_Purge(canusbContext, FT_PURGE_RX | FT_PURGE_TX);
+        FT_Write(canusbContext, buf, 2, &retLen);
 
         if (FT_ResetDevice(canusbContext) != FT_OK)
         {
-            log("Could not reset device");
+            log(adapterlog, "Could not reset device");
             return false;
         }
 
         // Set latency to 2 ms.
         if (FT_SetLatencyTimer(canusbContext, 2) != FT_OK)
         {
-            log("Could not set latency to two ms");
+            log(adapterlog, "Could not set latency to two ms");
             return false;
         }
 
         if (FT_SetBaudRate(canusbContext, FT_BAUD_921600) != FT_OK)
         {
-            log("Could not baud");
+            log(adapterlog, "Could not baud");
         }
 
-        if (!openChannel(canusbContext, device))
+        if (!openChannel(device))
         {
-            log("Open channel fail");
+            log(adapterlog, "Open channel fail");
             this->close();
             return FALSE;
         }
 
-        log("Channel open");
+        log(adapterlog, "Channel open");
+
         runThread = true;
+
         messageThreadPtr = new thread(messageThread, this);
 
         return true;
     }
     else
     {
-        log(".. failed");
-        canusbContext = 0;
+        log(adapterlog, ".. failed");
+
+        canusbContext = nullptr;
+
         this->close();
     }
 
@@ -660,13 +660,13 @@ bool canusb::close()
 
     if (!closeChannel())
     {
-        log("Could not close channel");
+        log(adapterlog, "Could not close channel");
     }
 
-    if (messageThreadPtr)
+    if ( messageThreadPtr != nullptr )
     {
         messageThreadPtr->join();
-        messageThreadPtr = 0;
+        messageThreadPtr = nullptr;
     }
 
     canusbContext = nullptr;
@@ -708,6 +708,7 @@ void canusb::messageThread(canusb *thisInstance)
         rc     = 0;
 
         pthread_mutex_lock(&eh.eMutex);
+
         while ((getstat = FT_GetStatus(thisInstance->canusbContext, &nRxCnt, &nTxCnt, &eventStatus)) == FT_OK &&
                 eventStatus       == 0 && 
                 nRxCnt            == 0 &&
@@ -721,18 +722,19 @@ void canusb::messageThread(canusb *thisInstance)
             rc = pthread_cond_timedwait(&eh.eCondVar, &eh.eMutex, &time);
             // rc = pthread_cond_wait(&eh.eCondVar, &eh.eMutex);
         }
+
         pthread_mutex_unlock(&eh.eMutex);
 
         if (!thisInstance->runThread) break;
-        if ((rc & ~ETIMEDOUT))        log("thread cond: " + to_hex(rc));
-        if (getstat != FT_OK)         log("ft_status: " + to_hex(getstat));
-        if (eventStatus & ~EventMask) log("evt_status: " + to_hex(eventStatus));
+        if ((rc & ~ETIMEDOUT))        log(adapterlog, "thread cond: " + to_hex(rc));
+        if (getstat != FT_OK)         log(adapterlog, "ft_status: " + to_hex(getstat));
+        if (eventStatus & ~EventMask) log(adapterlog, "evt_status: " + to_hex(eventStatus));
 
         if (nRxCnt)
         {
             if (nRxCnt > sizeof(gbufferRx))
             {
-                log("Overflow!");
+                log(adapterlog, "Overflow!");
                 nRxCnt = sizeof(gbufferRx);
             }
 
@@ -755,7 +757,7 @@ void canusb::messageThread(canusb *thisInstance)
                         }
 
                         if (cntMsgRcv > (1 + 3 + 1 + 16 + 1))
-                            log("cntMsgRcv >!");
+                            log(adapterlog, "cntMsgRcv >!");
                     }
 
                     // Start of message
@@ -764,7 +766,7 @@ void canusb::messageThread(canusb *thisInstance)
                         switch (c)
                         {
                         case 0x07: // Error
-                            log("error response");
+                            log(adapterlog, "error response");
                             break;
                         case 0x0d: // \n
                             inMessage = false;
@@ -781,7 +783,7 @@ void canusb::messageThread(canusb *thisInstance)
                         case 'z': // Response to sent standard frame
                             break;
                         default:
-                            log("Unknown char: " + to_hex((uint16_t) c, 1));
+                            log(adapterlog, "Unknown char: " + to_hex((uint16_t) c, 1));
                             break;
                         }
                     }
@@ -789,12 +791,12 @@ void canusb::messageThread(canusb *thisInstance)
             }
             else
             {
-                log("rc is not 0 (" + to_string(rc) + ")");
+                log(adapterlog, "rc is not 0 (" + to_string(rc) + ")");
             }
         }
     }
 
-    log("Message thread going down");
+    log(adapterlog, "Message thread going down");
 }
 
 bool canusb::open(channelData & device)
@@ -821,12 +823,12 @@ bool canusb::open(channelData & device)
             }
         }
 
-        if (FT_OpenEx((PVOID)device.name.c_str(), FT_OPEN_BY_SERIAL_NUMBER, &canusbContext) == 0)
+        if (FT_OpenEx((void*)device.name.c_str(), FT_OPEN_BY_SERIAL_NUMBER, &canusbContext) == 0)
         {
             // Set latency to 2 ms.
             FT_SetLatencyTimer(canusbContext, 2);
 
-            if (!openChannel(canusbContext, device))
+            if (!openChannel(device))
             {
                 this->close();
                 return FALSE;
@@ -848,8 +850,6 @@ bool canusb::open(channelData & device)
 
 bool canusb::close()
 {
-    // This is to prevent a deadlock
-    // Due to how those IDIOTS! wrote the library, there is no way to attach a callback...
     runThread = false;
 
     if (canusbContext && deviceHandle)

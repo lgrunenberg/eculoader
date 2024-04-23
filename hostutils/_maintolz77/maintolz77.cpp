@@ -177,7 +177,7 @@ static bool lzExtract(const lzImage_t* img, uint8_t* out)
 
 				inpos += 2;
 
-				for (uint32_t i = 0; i < length; i++)
+				while (length--)
 				{
 					out[outpos] = out[outpos - ofs];
 					outpos++;

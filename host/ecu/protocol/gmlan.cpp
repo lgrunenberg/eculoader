@@ -1,13 +1,12 @@
 #include "gmlan.h"
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <chrono>
-#include <time.h>
-
 #include "../../tools/tools.h"
 
+#include <cstdio>
+#include <cstdint>
+#include <cstring>
+#include <chrono>
+#include <time.h>
 
 using namespace timer;
 using namespace std;
@@ -81,8 +80,8 @@ uint8_t *gmlan::sendRequest(uint8_t *req, uint16_t len)
 
         if(!send(&sMsg))
         {
-            log("Could not send!");
-            return 0;
+            log(gmlanlog, "Could not send!");
+            return nullptr;
         }
     }
     else
@@ -99,16 +98,16 @@ uint8_t *gmlan::sendRequest(uint8_t *req, uint16_t len)
 
         if(!send(&sMsg))
         {
-            log("Could not send!");
-            return 0;
+            log(gmlanlog, "Could not send!");
+            return nullptr;
         }
 
         rMsg = waitMessage(500);
 
         if ((rMsg->message[0] & 0x30) != 0x30)
         {
-            log("Got no ack!");
-            return 0;
+            log(gmlanlog, "Got no ack!");
+            return nullptr;
         }
         uint8_t stp = 0x21;
 
@@ -122,12 +121,14 @@ uint8_t *gmlan::sendRequest(uint8_t *req, uint16_t len)
             ST = (ST&15) * 100; // microsec * 100
         else
         {
-            log("Received funny flow control frame");
+            log(gmlanlog, "Received funny flow control frame");
             ST = 0;
         }
 
         if (BS > 0)
-            log("BS is set. Implement!");
+        {
+            log(gmlanlog, "BS is set. Implement!");
+        }
 
         while (len > 0)
         {
@@ -145,11 +146,11 @@ uint8_t *gmlan::sendRequest(uint8_t *req, uint16_t len)
 
             if(!send(&sMsg))
             {
-                log("Could not send!");
-                return 0;
+                log(gmlanlog, "Could not send!");
+                return nullptr;
             }
 
-            sleepMicro(ST);
+            sleepMicro( ST );
         }
     }
 
@@ -160,7 +161,7 @@ busyWait:
     rMsg = waitMessage(500);
     if (rMsg->id != this->targetID)
     {
-        // log("No response");
+        // log(gmlanlog, "No response");
         // This maaaay not be a showstopper. if the previous response was a 7f 78.
         return recdat;
     }
@@ -201,7 +202,7 @@ busyWait:
         uint16_t toRec = ((rMsg->message[0] << 8 | rMsg->message[1]) & 0xfff) + 2;
         if (toRec <= 8)
         {
-            log("Target is drunk. Received undersized extended frame");
+            log(gmlanlog, "Target is drunk. Received undersized extended frame");
             return recdat;
         }
 
@@ -232,7 +233,7 @@ busyWait:
 
             if (rMsg->message[0] != stp) {
                 delete[] recdat;
-                return 0;
+                return nullptr;
             }
 
             stp = (stp+1)&0x2f;
@@ -245,13 +246,13 @@ busyWait:
     }
     else
     {
-        log("Unknown PCI");
+        log(gmlanlog, "Unknown PCI");
     }
 
     if (recdat)
         delete[] recdat;
 
-    return 0;
+    return nullptr;
 }
 
 // 04
@@ -259,7 +260,8 @@ bool gmlan::clearDiagnosticInformation()
 {
     uint8_t *ret, buf[8] = { 0x04 };
 
-    if ((ret = sendRequest(buf, 1)) == 0) return false;
+    if ((ret = sendRequest(buf, 1)) == nullptr)
+        return false;
 
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0x44)
     {
@@ -279,7 +281,8 @@ bool gmlan::InitiateDiagnosticOperation(uint8_t mode)
 {
     uint8_t *ret, buf[8] = { 0x10, mode };
 
-    if ((ret = sendRequest(buf, 2)) == 0) return false;
+    if ((ret = sendRequest(buf, 2)) == nullptr)
+        return false;
 
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0x50)
     {
@@ -295,14 +298,17 @@ bool gmlan::InitiateDiagnosticOperation(uint8_t mode)
 uint8_t *gmlan::ReadDataByIdentifier(uint8_t id)
 {
     uint8_t *ret, buf[3] = { 0x1a, id };
-    if ((ret = sendRequest(buf, 2)) == 0) return 0;
+
+    if ((ret = sendRequest(buf, 2)) == nullptr)
+        return nullptr;
 
     uint16_t retLen = (ret[0] << 8 | ret[1]) + 2;
+
 #warning "Clean me!"
     if (retLen < 5 ||  ret[2] != 0x5a || ret[3] != id)
     {
         delete[] ret;
-        return 0;
+        return nullptr;
     }
 
     retLen-=4;
@@ -324,7 +330,8 @@ bool gmlan::returnToNormal()
 {
     uint8_t *ret, buf[8] = { 0x20 };
 
-    if ((ret = sendRequest(buf, 1)) == 0) return false;
+    if ((ret = sendRequest(buf, 1)) == nullptr)
+        return false;
 
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0x60)
     {
@@ -340,7 +347,8 @@ bool gmlan::returnToNormal()
 // Read from a 24-bit address using a 16-bit size argument
 uint8_t *gmlan::readMemoryByAddress_24_16(uint32_t address, uint32_t len, uint32_t blockSize)
 {
-    if (len == 0) return 0;
+    if (len == 0)
+        return nullptr;
 
     uint8_t  *ret, buf[8] = { 0x23 };
     uint8_t *dataBuf = new uint8_t[len];
@@ -356,19 +364,19 @@ uint8_t *gmlan::readMemoryByAddress_24_16(uint32_t address, uint32_t len, uint32
         buf[4] = (thisLen >> 8);
         buf[5] = thisLen;
 
-        if ((ret = sendRequest(buf, 6)) == 0)
+        if ((ret = sendRequest(buf, 6)) == nullptr)
         {
-            log("No retbuffer for read by address");
+            log(gmlanlog, "No retbuffer for read by address");
             delete[] dataBuf;
-            return 0;
+            return nullptr;
         }
 
         if ((uint32_t)(ret[0] << 8 | ret[1]) != (thisLen + 4) || ret[2] != 0x63)
         {
-            log("Read unexpected response");
+            log(gmlanlog, "Read unexpected response");
             delete[] ret;
             delete[] dataBuf;
-            return 0;
+            return nullptr;
         }
 
         // xx xx 63 HH MM LL .. .. ..
@@ -388,7 +396,8 @@ uint8_t *gmlan::readMemoryByAddress_24_16(uint32_t address, uint32_t len, uint32
 // Read from a 32-bit address using a 16-bit size argument
 uint8_t *gmlan::readMemoryByAddress_32_16(uint32_t address, uint32_t len, uint32_t blockSize)
 {
-    if (len == 0) return 0;
+    if (len == 0)
+        return nullptr;
 
     uint8_t  *ret, buf[8] = { 0x23 };
     uint8_t *dataBuf = new uint8_t[len];
@@ -405,19 +414,19 @@ uint8_t *gmlan::readMemoryByAddress_32_16(uint32_t address, uint32_t len, uint32
         buf[5] = (thisLen >> 8);
         buf[6] = thisLen;
 
-        if ((ret = sendRequest(buf, 7)) == 0)
+        if ((ret = sendRequest(buf, 7)) == nullptr)
         {
-            log("No retbuffer for read by address");
+            log(gmlanlog, "No retbuffer for read by address");
             delete[] dataBuf;
-            return 0;
+            return nullptr;
         }
 
         if ((uint32_t)(ret[0] << 8 | ret[1]) != (thisLen + 5) || ret[2] != 0x63)
         {
-            log("Read unexpected response");
+            log(gmlanlog, "Read unexpected response");
             delete[] ret;
             delete[] dataBuf;
-            return 0;
+            return nullptr;
         }
 
         // xx xx 63 HH MM LL .. .. ..
@@ -439,7 +448,8 @@ uint8_t *gmlan::readMemoryByAddress_32_16(uint32_t address, uint32_t len, uint32
 // Read from a 32-bit address using a 24-bit size argument
 uint8_t *gmlan::readMemoryByAddress_32_24(uint32_t address, uint32_t len, uint32_t blockSize)
 {
-    if (len == 0) return 0;
+    if (len == 0)
+        return nullptr;
 
     uint8_t  *ret, buf[10] = { 0x23 };
     uint8_t *dataBuf = new uint8_t[len];
@@ -458,19 +468,19 @@ uint8_t *gmlan::readMemoryByAddress_32_24(uint32_t address, uint32_t len, uint32
         buf[6] = (thisLen >> 8);
         buf[7] = thisLen;
 
-        if ((ret = sendRequest(buf, 8)) == 0)
+        if ((ret = sendRequest(buf, 8)) == nullptr)
         {
-            log("No retbuffer for read by address");
+            log(gmlanlog, "No retbuffer for read by address");
             delete[] dataBuf;
-            return 0;
+            return nullptr;
         }
 
         if ((uint32_t)(ret[0] << 8 | ret[1]) != (thisLen + 4) || ret[2] != 0x63)
         {
-            log("Read unexpected response");
+            log(gmlanlog, "Read unexpected response");
             delete[] ret;
             delete[] dataBuf;
-            return 0;
+            return nullptr;
         }
 
         // xx xx 63 HH MM LL .. .. ..
@@ -511,7 +521,7 @@ bool gmlan::disableNormalCommunication(int exdAddr)
 
     if(!send(&sMsg))
     {
-        log("Could not send!");
+        log(gmlanlog, "Could not send!");
         return false;
     }
 
@@ -542,7 +552,7 @@ bool gmlan::disableNormalCommunicationNoResp(int exdAddr)
 
     if(!send(&sMsg))
     {
-        log("Could not send!");
+        log(gmlanlog, "Could not send!");
         return false;
     }
 
@@ -556,7 +566,8 @@ bool gmlan::requestDownload_16(uint32_t size, uint8_t fmt)
     buf[3] = size >> 8;
     buf[4] = size;
 
-    if ((ret = sendRequest(buf, 4)) == 0) return false;
+    if ((ret = sendRequest(buf, 4)) == nullptr)
+        return false;
 
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0x74)
     {
@@ -576,7 +587,8 @@ bool gmlan::requestDownload_24(uint32_t size, uint8_t fmt)
     buf[3] = size >> 8;
     buf[4] = size;
 
-    if ((ret = sendRequest(buf, 5)) == 0) return false;
+    if ((ret = sendRequest(buf, 5)) == nullptr)
+        return false;
 
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0x74)
     {
@@ -597,7 +609,8 @@ bool gmlan::requestDownload_32(uint32_t size, uint8_t fmt)
     buf[4] = size >> 8;
     buf[5] = size;
 
-    if ((ret = sendRequest(buf, 6)) == 0) return false;
+    if ((ret = sendRequest(buf, 6)) == nullptr)
+        return false;
 
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0x74)
     {
@@ -622,32 +635,35 @@ bool gmlan::transferData_32(const uint8_t *data, uint32_t address, uint32_t len,
     buf[0] = 0x36;
     buf[1] = 0;
 
+    progress( 0 );
+
     // Prevent overflow of message buffer
     if (blockSize > 256)
         blockSize = 256;
+    if (blockSize == 0)
+        return false;
 
     // We want it to send the request
     while (remain > 0)
     {
-        uint32_t thisLen = (remain > blockSize) ? blockSize : remain;
+        size_t thisLen = (remain > blockSize) ? blockSize : remain;
         buf[2] = addrPtr >> 24;    // 2
         buf[3] = addrPtr >> 16;    // 3
         buf[4] = addrPtr >> 8;     // 4
         buf[5] = addrPtr;          // 5
 
-        for (uint32_t i = 0; i < thisLen; i++)
-            buf[6 + i] = data[bufPtr + i];
+        memcpy(&buf[6], &data[bufPtr], thisLen);
 
-        if ((ret = sendRequest(buf, thisLen + 6)) == 0)
+        if ((ret = sendRequest(buf, thisLen + 6)) == nullptr)
         {
-            log("Transfer failed (no answer)");
+            log(gmlanlog, "Transfer failed (no answer)");
             return false;
         }
 
         // 00 xx 76
         if ((uint32_t)(ret[0] << 8 | ret[1])  < 1 || ret[2] != 0x76)
         {
-            log("Received fail");
+            log(gmlanlog, "Received fail");
             delete[] ret;
             return false;
         }
@@ -656,6 +672,8 @@ bool gmlan::transferData_32(const uint8_t *data, uint32_t address, uint32_t len,
         bufPtr += thisLen;
         remain -= thisLen;
         addrPtr += thisLen;
+
+        progress( (uint32_t)(float) ( 100.0 * (len-remain)) / len );
     }
 
     if (execute == true)
@@ -667,7 +685,7 @@ bool gmlan::transferData_32(const uint8_t *data, uint32_t address, uint32_t len,
         buf[5] = address;          // 5
 
         // Special case. It's expected NOT to respond when requesting start of code
-        if ((ret = sendRequest(buf, 6)) == 0)
+        if ((ret = sendRequest(buf, 6)) == nullptr)
         {
             return true;
         }
@@ -675,10 +693,11 @@ bool gmlan::transferData_32(const uint8_t *data, uint32_t address, uint32_t len,
         // 00 xx 76
         if ((uint32_t)(ret[0] << 8 | ret[1])  < 1 || ret[2] != 0x76)
         {
-            log("Received fail");
+            log(gmlanlog, "Received fail");
             delete[] ret;
             return false;
         }
+
         delete[] ret;
     }
 
@@ -694,10 +713,13 @@ bool gmlan::WriteDataByIdentifier(const uint8_t *dat, uint8_t id, uint32_t len)
     if (len > 256)
         return false;
 
-    if (dat)   for (uint32_t i = 0; i < len; i++)    buf[i + 2] = dat[i];
-    else       for (uint32_t i = 0; i < len; i++)    buf[i + 2] = 0;
+    if (dat)
+        memcpy(&buf[2], dat, len);
+    else
+        memset(&buf[2], 0  , len);
 
-    if ((ret = sendRequest(buf, len + 2)) == 0) return false;
+    if ((ret = sendRequest(buf, len + 2)) == nullptr)
+        return false;
 
     // 20202020202020202020
     // 00 02 7b __ xx xx
@@ -707,7 +729,7 @@ bool gmlan::WriteDataByIdentifier(const uint8_t *dat, uint8_t id, uint32_t len)
         return false;
     }
 
-    log("Succ??");
+    log(gmlanlog, "Succ??");
     delete[] ret;
     return true;
 }
@@ -730,7 +752,7 @@ bool gmlan::testerPresent(int exdAddr)
 
         if(!send(&sMsg))
         {
-            log("Could not send!");
+            log(gmlanlog, "Could not send!");
             return false;
         }
 
@@ -745,7 +767,7 @@ bool gmlan::testerPresent(int exdAddr)
 
         if(!send(&sMsg))
         {
-            log("Could not send!");
+            log(gmlanlog, "Could not send!");
             return false;
         }
     }
@@ -768,16 +790,16 @@ bool gmlan::ReportProgrammedState()
 {
     uint8_t *ret, buf[8] = { 0xa2 };
 
-    if ((ret = sendRequest(buf, 1)) == 0)
+    if ((ret = sendRequest(buf, 1)) == nullptr)
     {
-        log("Could not retrieve programmed state");
+        log(gmlanlog, "Could not retrieve programmed state");
         return false;
     }
 
     // 00 02 e2 <st>
     if ((uint32_t)(ret[0] << 8 | ret[1])  < 2 || ret[2] != 0xe2)
     {
-        log("Could not retrieve programmed state");
+        log(gmlanlog, "Could not retrieve programmed state");
         delete[] ret;
         return false;
     }
@@ -798,7 +820,7 @@ bool gmlan::ReportProgrammedState()
         break;
     }
 
-    log("Target state: " + state);
+    log(gmlanlog, "Target state: " + state);
 
     delete[] ret;
     return true;
@@ -812,7 +834,8 @@ bool gmlan::ProgrammingMode(uint8_t lev)
 {
     uint8_t *ret, buf[8] = { 0xa5, lev };
 
-    if ((ret = sendRequest(buf, 2)) == 0) return false;
+    if ((ret = sendRequest(buf, 2)) == nullptr)
+        return false;
 
     // 00 01 e5 ..?
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0xE5)
@@ -833,10 +856,13 @@ bool gmlan::DeviceControl(const uint8_t *dat, uint8_t id, uint8_t len)
     if (len > 256)
         return false;
 
-    if (dat)   for (uint32_t i = 0; i < len; i++)    buf[i + 2] = dat[i];
-    else       for (uint32_t i = 0; i < len; i++)    buf[i + 2] = 0;
-
-    if ((ret = sendRequest(buf, len + 2)) == 0) return false;
+    if (dat)
+        memcpy(&buf[2], dat, len);
+    else
+        memset(&buf[2], 0  , len);
+    
+    if ((ret = sendRequest(buf, len + 2)) == nullptr)
+        return false;
 
     if ((uint32_t)(ret[0] << 8 | ret[1]) < 1 || ret[2] != 0xee)
     {

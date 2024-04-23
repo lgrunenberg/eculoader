@@ -1,7 +1,6 @@
 #ifndef GMLAN_H
 #define GMLAN_H
 
-#include "../../tools/tools.h"
 #include "../../adapter/adapter.h"
 
 typedef struct {
@@ -105,87 +104,6 @@ public:
 
     // ae
     bool DeviceControl(const uint8_t*,uint8_t,uint8_t);
-};
-
-
-class gmConfig
-{
-public:
-    // Checksum
-    uint32_t CS = 0;
-
-    // Module ID
-    uint32_t MID = 0;
-
-    // HFI  Header Format Identifier
-    uint32_t lSWMI = 4;     // Size of SWMI field (4-16)
-    bool     lDLS  = false; // Extend DLS to 3 bytes instead of 2
-    bool     PMA   = false; // Product Memory Address. Enable NOAR, Product Memory Address, Memory Length field fields
-    bool     lHFI  = false; // Extend HFI to two bytes
-    bool     MPFH  = false; // (EXTENDED) Include address information for several calibration files
-    bool     DCID  = false; // (EXTENDED) Include compatibility identifier(s)
-
-    // Software Module Identifier (4 - 16)
-    uint8_t  SWMI[16] = {0};
-    // Design Level Suffix or Alpha Code
-    uint8_t  DLS[3] = {0};
-
-    // Number Of Additional Modules (MPFH must be set for this to be present)
-    uint32_t NOAM = 0;
-
-    // Base target and eventual additional targets.
-    module_t target[17] = {0};
-
-    uint32_t construct(uint8_t *buffer)
-    {
-        uint32_t hdrLen = 0;
-        return hdrLen;
-    }
-
-    void defaults()
-    {
-        // Reset checksum
-        this->CS = 0;
-
-        // Reset Module ID
-        this->MID = 0;
-
-        this->lSWMI = 4;
-
-        this->lDLS = false;
-        this->PMA  = false;
-        this->lHFI = false;
-        this->MPFH = false;
-        this->DCID = false;
-
-        this->NOAM = 0;
-
-        this->nTargets = 0;
-
-        for (uint32_t trg = 0; trg < (sizeof(this->target) / sizeof(this->target[0])); trg++)
-        {
-            this->target[trg].DCID = 0;
-            this->target[trg].NOAR = 0;
-
-            for (uint32_t i = 0; i < (sizeof(this->target[0].range) / sizeof(this->target[0].range[0])); i++)
-            {
-                this->target[trg].range[i].NOB = 0;
-                this->target[trg].range[i].PMA = 0;
-            }
-        }
-
-        for (uint32_t i = 0; i < sizeof(this->SWMI); i++)
-            this->SWMI[i] = 0;
-        for (uint32_t i = 0; i < sizeof(this->DLS); i++)
-            this->DLS[i] = 0;
-    }
-
-    explicit gmConfig()
-    {
-        this->defaults();
-    }
-private:
-    uint32_t nTargets = 0;
 };
 
 #endif

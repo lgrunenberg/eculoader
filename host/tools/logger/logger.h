@@ -8,14 +8,18 @@ namespace logger
         genericlog    ,
         filemanager   ,
         e39log        ,
+        gmlanlog      ,
+        adapterlog    ,
     };
 
     class logger_t {
     public:
-        virtual void log(logWho who, std::string message) = 0;
+        virtual void log(const logWho&, const std::string&) = 0;
+        virtual void progress(uint32_t) = 0;
     };
 
-    void loggerInstall (logger_t    *parent);
-    void log           (logWho       who, std::string message);
-    void log           (std::string  message);
+    void loggerInstall (logger_t*);
+    void log           (logWho, std::string);
+    void log           (std::string);
+    void progress      (uint32_t);
 }
