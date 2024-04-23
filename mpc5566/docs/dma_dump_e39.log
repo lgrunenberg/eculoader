@@ -1,40 +1,49 @@
-Each control box is 32 bytes  (  + 20 / box  )
-Base - fff4_5000
+Each control box is 32 bytes  (  + 0x20 / box  )
 
-      sys addr contents
-111 ? fff4500000000000     4,312  < DMA source      >
-111 ? fff4500000000000     1,314  < DMA destination >
+box {
+00: Source address
+04 - 0f: < read ds >
+10: Destination address
+14 - 1f: < read ds >
+}
 
-111 ? fff45140 4001cf20     1,310
-111 ? fff45140 fff80024     1,316 < EQADC_CFPR5 - eQADC command FIFO push register 5 >
+Base: fff4_5000
 
-111 ? fff45160 fff80046     1,312 < EQADC_RFPR5 - eQADC result FIFO pop register 5 + 2 >
-111 ? fff45160 4001d0d6     1,312
+box base  contents
+fff45000  00000000    < DMA source      >
+fff45000  00000000    < DMA destination >
 
 
-111 ? fff45400 00000000     1,316
-111 ? fff45400 fff90034     1,310 < DSPIA_PUSHR - DSPI push TX FIFO register >
+fff45140  4001cf20
+fff45140  fff80024    < EQADC_CFPR5 - eQADC command FIFO push register 5 >
 
-111 ? fff45420 fff9003a     1,310 < DSPIA_POPR - DSPI pop RX FIFO register + 2 >
-111 ? fff45420 00000000     1,318
+fff45160  fff80046    < EQADC_RFPR5 - eQADC result FIFO pop register 5 + 2 >
+fff45160  4001d0d6
 
-111 ? fff45180 4001d194     1,314
-111 ? fff45180 fff94034     1,318 < DSPIB_PUSHR - DSPI push TX FIFO register >
 
-111 ? fff451a0 fff9403a     1,314 < DSPIB_POPR - DSPI pop RX FIFO register + 2 >
-111 ? fff451a0 4001d1ce     1,312
+fff45400  00000000
+fff45400  fff90034    < DSPIA_PUSHR - DSPI push TX FIFO register >
 
-111 ? fff451c0 4001d59c     1,314
-111 ? fff451c0 fff98034     1,316 < DSPIC_PUSHR - DSPI push TX FIFO register >
+fff45420  fff9003a    < DSPIA_POPR - DSPI pop RX FIFO register + 2 >
+fff45420  00000000
 
-111 ? fff451e0 fff9803a     1,314 < DSPIC_POPR - DSPI pop RX FIFO register + 2 >
-111 ? fff451e0 4001d77c     1,316
+fff45180  4001d194
+fff45180  fff94034    < DSPIB_PUSHR - DSPI push TX FIFO register >
 
-111 ? fff45200 4001d790     1,318
-111 ? fff45200 fff9c034     1,312 < DSPID_PUSHR - DSPI push TX FIFO register >
+fff451a0  fff9403a    < DSPIB_POPR - DSPI pop RX FIFO register + 2 >
+fff451a0  4001d1ce
 
-111 ? fff45220 fff9c03a     1,314 < DSPID_POPR - DSPI pop RX FIFO register + 2 >
-111 ? fff45220 4001d79a     1,314
+fff451c0  4001d59c
+fff451c0  fff98034    < DSPIC_PUSHR - DSPI push TX FIFO register >
+
+fff451e0  fff9803a    < DSPIC_POPR - DSPI pop RX FIFO register + 2 >
+fff451e0  4001d77c
+
+fff45200  4001d790 
+fff45200  fff9c034    < DSPID_PUSHR - DSPI push TX FIFO register >
+
+fff45220  fff9c03a    < DSPID_POPR - DSPI pop RX FIFO register + 2 >
+fff45220  4001d79a
 
 
 
