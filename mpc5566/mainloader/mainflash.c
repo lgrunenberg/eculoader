@@ -27,7 +27,7 @@ static const uint32_t mpc5566Partitions[] =  {
 // val > 1 = fail
 uint32_t FLASH_Format(const uint32_t mask)
 {
-#ifdef disableflash
+#ifdef disableFlash
     return 1;
 #else
     volatile uint32_t *FLASH_LMLR = (uint32_t *)&FLASHREGS.LMLR.direct;
@@ -49,7 +49,7 @@ uint32_t FLASH_Format(const uint32_t mask)
     FLASH_LMLR[0] |= ((lockmask>>28)&1)<<20|((lockmask>>6)&3)<<16|(lockmask&0x3F);
     FLASH_LMLR[1] |= (lockmask>>8)&0xFFFFF;
 
-#ifdef enableDebugBOX
+#ifdef enableDebugBox
     sendDebug(1, mask);
 #endif
 
@@ -81,7 +81,7 @@ uint32_t FLASH_Format(const uint32_t mask)
 
 uint32_t FLASH_Write(const uint32_t addr, const uint32_t len, const void *buffer)
 {
-#ifdef disableflash
+#ifdef disableFlash
     return 0;
 #else  
     volatile uint32_t *flPtr = (uint32_t*)addr;
@@ -89,7 +89,7 @@ uint32_t FLASH_Write(const uint32_t addr, const uint32_t len, const void *buffer
     uint32_t tempLen = len / 8;
     uint32_t tries = 50;
 
-#ifdef enableDebugBOX
+#ifdef enableDebugBox
     sendDebug(addr, len);
 #endif
 

@@ -17,6 +17,10 @@
 .global initECC_hi
 
 # # # # # # # # # # # # # # # # # # # #
+# Disable devices from array
+.global disableDevices
+
+# # # # # # # # # # # # # # # # # # # #
 # "External" interrupts
 enableEE:
     mfmsr %r3
@@ -94,8 +98,11 @@ rfi
 rebaseInterrupt:
     mtspr        63, %r3 /* Store base */
 
+#   li          %r3, 0x10
+#   mtspr     0x190, %r3 /* ivor 0, Critical input - Disabled in msr */
+
     li          %r3, 0x20
-    mtspr     0x191, %r3 /* ivor 1, machine check exception. This is catastrophic! */
+    mtspr     0x191, %r3 /* ivor 1, machine check exception. - This is catastrophic! */
 
 #   Read or write access control exception
 #   Byte ordering exception
@@ -195,6 +202,62 @@ ECCinitHi:
     addi   %sp, %sp, 16
 blr
 
+disableDevices:
+
+    li        %r3, (eDisList - sDisList) / 8
+    mtctr     %r3
+    lis       %r3, disData@h
+    ori       %r3, %r3, disData@l
+
+disDevL:
+    lwzu      %r4, 4(%r3)
+    lwzu      %r5, 4(%r3)
+    stw       %r5, 0(%r4)
+    bdnz disDevL
+
+disData:
+blr
+
+sDisList:
+# .long  0xFFFC0000, 0x80000000 // A
+.long  0xFFFC4000, 0x80000000 /* B */
+.long  0xFFFC8000, 0x80000000 /* C */
+.long  0xFFFCC000, 0x80000000 /* D */
+# Disable CAN A interrupts
+.long  0xFFFC0024, 0x00000000
+.long  0xFFFC0028, 0x00000000
+# eTPU A and B (Must be taken down before eMIOS)
+.long  0xC3FC0014, 0x40000000
+.long  0xC3FC0018, 0x40000000
+# eDMA ints
+.long  0xFFF44008, 0x00000000
+.long  0xFFF4400C, 0x00000000
+.long  0xFFF44010, 0x00000000
+.long  0xFFF44014, 0x00000000
+# 0xFFF44020, 0x00000000 /* High (it is available. Bad DS) */
+# 0xFFF44024, 0x00000000 /* Low request */
+# DSPI ints
+.long  0xFFF90030, 0x00000000
+.long  0xFFF94030, 0x00000000
+.long  0xFFF98030, 0x00000000
+.long  0xFFF9C030, 0x00000000
+.long  0xC3F90018, 0x00000000 /* SIU_DIRER (DMA Int) */
+.long  0xC3F90024, 0x00000000 /* SIU_ORER */
+.long  0xC3F90028, 0x00000000 /* SIU_IREER */
+.long  0xC3F9002C, 0x00000000 /* SIU_IFEER */
+# eQADC ints
+.long  0xFFF80000, 0x00000000 /* No debug, no SSI */
+# DSPI
+.long  0xFFF90000, 0x00004000 /* A */
+.long  0xFFF94000, 0x00004000 /* B */
+.long  0xFFF98000, 0x00004000 /* C */
+# Disable eMIOS module
+.long  0xC3FA0000, 0x40000000
+# .. eQADC ints
+.long  0xFFF80060, 0x00000000
+.long  0xFFF80064, 0x00000000
+.long  0xFFF80068, 0x00000000
+eDisList:
 
 .section .rodata
 .align 4

@@ -23,7 +23,6 @@ typedef struct {
     const uint8_t  data[];
 } lzImage_t;
 
-
 extern uint8_t __s_mainLoader[];
 
 static uint32_t mainReady = 0;
@@ -59,7 +58,7 @@ static void broadcast_e78SPIWatchdog()
 }
 #endif
 
-#ifdef enableDebugBOX
+#ifdef enableDebugBox
 static void m_sendDebug(const uint32_t step, const uint32_t extra)
 {
     static uint32_t stSent = 0;
@@ -99,7 +98,7 @@ uint32_t hardArbiter(const uint32_t hardVec)
         else if (FLASHREGS.MCR.direct & FLASH_MCR_RWE_MSK)
             FLASHREGS.MCR.direct |= FLASH_MCR_RWE_MSK;
 
-#ifdef enableDebugBOX
+#ifdef enableDebugBox
         // Something else caused this interrupt, oh sh!t
         else m_sendDebug(0x3636, hardVec);
 #endif
@@ -141,7 +140,7 @@ uint32_t hardArbiter(const uint32_t hardVec)
 
     /// I don't know this caller (or, more precisely, didn't expect the code to ever cause it)
     default:
-#ifdef enableDebugBOX
+#ifdef enableDebugBox
         m_sendDebug(0x3635, hardVec);
 #endif
         break;
@@ -158,6 +157,7 @@ static void setupIntTable()
     // Base of SRAM
     uint32_t *ptr = (uint32_t*)tablebase;
 
+    // Set up a table totaling 512 bytes
     for (uint32_t i = 0; i < 32; i++) // ( 0 to 15 + 32 to 34 + padding to make it nice and even)
     {
         // uint32_t branch = (((uint32_t) &intEntry) - ((uint32_t) ptr)) - 12;
@@ -170,50 +170,8 @@ static void setupIntTable()
     }
 }
 
-static const runInit_t runInit[] = {
-    // FlexCAN
-//  { (uint32_t *)0xFFFC0000, 0x80000000 }, // A
-    { (uint32_t *)0xFFFC4000, 0x80000000 }, // B
-    { (uint32_t *)0xFFFC8000, 0x80000000 }, // C
-    { (uint32_t *)0xFFFCC000, 0x80000000 }, // D
-    // Disable CAN A interrupts
-    { (uint32_t *)0xFFFC0024, 0x00000000 },
-    { (uint32_t *)0xFFFC0028, 0x00000000 },
-    // eTPU A and B (Must be taken down before eMIOS)
-    { (uint32_t *)0xC3FC0014, 0x40000000 },
-    { (uint32_t *)0xC3FC0018, 0x40000000 },
-    // eDMA ints
-    { (uint32_t *)0xFFF44008, 0x00000000 },
-    { (uint32_t *)0xFFF4400C, 0x00000000 },
-    { (uint32_t *)0xFFF44010, 0x00000000 },
-    { (uint32_t *)0xFFF44014, 0x00000000 },
-//  { (uint32_t *)0xFFF44020, 0x00000000 }, // High (it is available. Bad DS)
-//  { (uint32_t *)0xFFF44024, 0x00000000 }, // Low request
-    // DSPI ints
-    { (uint32_t *)0xFFF90030, 0x00000000 },
-    { (uint32_t *)0xFFF94030, 0x00000000 },
-    { (uint32_t *)0xFFF98030, 0x00000000 },
-    { (uint32_t *)0xFFF9C030, 0x00000000 },
-    { (uint32_t *)0xC3F90018, 0x00000000 }, // SIU_DIRER (DMA Int)
-    { (uint32_t *)0xC3F90024, 0x00000000 }, // SIU_ORER
-    { (uint32_t *)0xC3F90028, 0x00000000 }, // SIU_IREER
-    { (uint32_t *)0xC3F9002C, 0x00000000 }, // SIU_IFEER
-    // eQADC ints
-    { (uint32_t *)0xFFF80000, 0x00000000 }, // No debug, no SSI
-    // DSPI
-    { (uint32_t *)0xFFF90000, 0x00004000 }, // A
-    { (uint32_t *)0xFFF94000, 0x00004000 }, // B
-    { (uint32_t *)0xFFF98000, 0x00004000 }, // C
-    // Disable eMIOS module
-    { (uint32_t *)0xC3FA0000, 0x40000000 },
-    // .. eQADC ints
-    { (uint32_t *)0xFFF80060, 0x00000000 },
-    { (uint32_t *)0xFFF80064, 0x00000000 },
-    { (uint32_t *)0xFFF80068, 0x00000000 },
-};
-
 // Disable a little bit of everything..
-static void disable_Internal()
+static void disableInternal()
 {
     // Set lowest priority for ever INTC source
     uint8_t *PSRn = (uint8_t*)INTC_PSR;
@@ -222,10 +180,7 @@ static void disable_Internal()
 
 #ifndef BAMMODE
 
-    for (int i = 0; i < (sizeof(runInit)/sizeof(runInit[0])); i++)
-    {
-        *runInit[i].ptr = runInit[i].data;
-    }
+    disableDevices();
 
 /*
     // .. eQADC ints
@@ -271,7 +226,7 @@ static void configure_Internal()
     // Main loader has not been extracted and is _NOT_ fit to receive external interrupts
     mainReady = 0;
 
-    disable_Internal();
+    disableInternal();
 
     setupIntTable();
 

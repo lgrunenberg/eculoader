@@ -8,7 +8,6 @@
 .global ReadData
 
 .global waitTimerZero
-.global configureTBL
 .global loaderID
 
 # # # # # # # # # # # # # # # # # # # #

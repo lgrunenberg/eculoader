@@ -9,7 +9,6 @@
 // RequestDownload: ???
 // It's kinda useless since compression really need its own message format..?
 
-// Don't give a shit what the project settings are.
 // Os and O2 are both known to make things.. weird
 #pragma GCC push_options
 #pragma GCC optimize ("Og")

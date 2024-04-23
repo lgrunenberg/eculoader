@@ -25,27 +25,33 @@ LZTOOL=../hostutils/maintolz77
 CSTOOL=../hostutils/bin2csfile
 endif
 
+-include ../.private/mpc5566_overrides.mk
+
+# Where in ram should the loader be uploaded to
+# e39 is able to fit an image just over 8 k starting from 0x40004000
+# Would be better off at 0x40002000 but then you get a cranky e78 sooo.. may have to figure out something better
+# Then there's e39a where gm's loader is at 0x40007000
+# The compressed image is currently using this base + 0x4000 as its target
+ifndef LOADER_BASE
+LOADER_BASE=0x40004000
+endif
+
+ifndef MODFLAG
 MODFLAG=
 # MODFLAG += -DBAMMODE
-# MODFLAG += -DenableDebugBOX
-# MODFLAG += -Ddisableflash
+# MODFLAG += -DenableDebugBox
+# MODFLAG += -DdisableFlash
 MODFLAG += -DenableBroadcast
+endif
 
-# 401 403 405 405fp 440 440fp 464 464fp 476 476fp
-# 505 601 602 603 603e 604 604e 620 630 740 7400 7450 750
-# 801 821 823 8540 8548 860 970 G3 G4 G5 a2 cell
-# e300c2 e300c3 e500mc e500mc64 e5500 e6500 ec603e native
+# The actual core, e200z6, is not available in gcc so a similar one had to be picked
 
-# Actual: e200z6
-
-# Not really the correct model but we get the right instruction set.
-# (Avoid float just to stay safe. Don't know how it'll behave)
 ifdef OS
 TARGPROC = -mcpu=ec603e -mspe -mno-toc -mbig-endian
 else
 TARGPROC = -mspe -mno-toc -mbig-endian
 endif
-GLOBFLAGS= $(MODFLAG) -Dmpc5566 -DPOWERPC -I../sysfiles
+GLOBFLAGS= $(MODFLAG) -DLDR_BASE=$(LOADER_BASE) -Dmpc5566 -DPOWERPC -I../sysfiles
 ASFLAGS  = $(TARGPROC) $(GLOBFLAGS)
 CFLAGS   = $(TARGPROC) $(GLOBFLAGS) -Os -Wall -Werror -Wpedantic -std=gnu99
 
@@ -131,6 +137,10 @@ out/loader.bin : out/loader.elf
 	@$(OBJCOPY) -O binary  $< $@
 	@rm -f Bootloader_mpc5566.cs
 	@$(CSTOOL) out/loader.bin Bootloader_mpc5566
+ifdef COPY_CS
+	@echo "- Copying .cs file -"
+	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/bootloaders/Bootloader_mpc5566.cs
+endif
 	@echo " "
 	@echo " "
 	@echo ___Main loader_________________
@@ -140,11 +150,11 @@ out/loader.bin : out/loader.elf
 	@$(SIZE) -B out/loader.elf $(PREOBJ)
 	@echo " "
 ifdef OS
-	@cp Bootloader_mpc5566.cs ../../Trionic/TrionicCANLib/bootloaders/Bootloader_mpc5566.cs
 	@./makehelper.bat
 else
 	@./makehelper.sh
 endif
+	@echo "Image base: "$(LOADER_BASE)
 
 clean :
 	@echo Cleaning..

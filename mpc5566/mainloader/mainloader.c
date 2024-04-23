@@ -123,7 +123,7 @@ void canSend(const void *data)
     writeSPR(SPR_DEC, canInterframe);
 }
 
-#ifdef enableDebugBOX
+#ifdef enableDebugBox
 void canSendFast_d(const void *data)
 {
     uint8_t *boxData = CAN_A_BOX[ CANBOX_DBG ].data;
@@ -240,9 +240,9 @@ static uint32_t configureFlexCAN()
 
     CAN_A.MCR.direct &= ~0x0021003F;    // no buffers, disable MBFEN and warnings
 
-#if (defined(enableDebugBOX) && defined(enableBroadcast))
+#if (defined(enableDebugBox) && defined(enableBroadcast))
     CAN_A.MCR.direct |=  0x020000 | 3; // No stupid self-reception and use 4 buffers
-#elif (defined(enableDebugBOX) || defined(enableBroadcast))
+#elif (defined(enableDebugBox) || defined(enableBroadcast))
     CAN_A.MCR.direct |=  0x020000 | 2; // No stupid self-reception and use 3 buffers
 #else
     CAN_A.MCR.direct |=  0x020000 | 1; // No stupid self-reception and use 2 buffers
@@ -264,13 +264,13 @@ static uint32_t configureFlexCAN()
     *(uint32_t*)&CAN_A_BOX[ CANBOX_TX ] |= 0x08080000;
     CAN_A_BOX[ CANBOX_TX ].ID.STD.ID = localID;
 
-#if (defined(enableDebugBOX) && defined(enableBroadcast))
+#if (defined(enableDebugBox) && defined(enableBroadcast))
     *(uint32_t*)&CAN_A_BOX[ CANBOX_DBG ] |= 0x08080000;
     CAN_A_BOX[ CANBOX_DBG ].ID.STD.ID = debugID;
     *(uint32_t*)&CAN_A_BOX[ CANBOX_BRC ] |= 0x08080000;
     CAN_A_BOX[ CANBOX_BRC ].ID.STD.ID = broadcastID;
     preloadBroadcast();
-#elif defined(enableDebugBOX)
+#elif defined(enableDebugBox)
     *(uint32_t*)&CAN_A_BOX[ CANBOX_DBG ] |= 0x08080000;
     CAN_A_BOX[ CANBOX_DBG ].ID.STD.ID = debugID;
 #elif defined(enableBroadcast)

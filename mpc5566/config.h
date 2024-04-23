@@ -7,10 +7,10 @@
 #define CANBOX_RX   ( 0 )
 #define CANBOX_TX   ( 1 )
 
-#if (defined(enableDebugBOX) && defined(enableBroadcast))
+#if (defined(enableDebugBox) && defined(enableBroadcast))
 #define CANBOX_DBG  ( 2 )
 #define CANBOX_BRC  ( 3 )
-#elif defined(enableDebugBOX)
+#elif defined(enableDebugBox)
 #define CANBOX_DBG  ( 2 )
 #elif defined(enableBroadcast)
 #define CANBOX_BRC  ( 2 )
